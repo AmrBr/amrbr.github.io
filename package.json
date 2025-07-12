@@ -7,7 +7,7 @@
     "build": "astro build",
     "preview": "astro build && wrangler pages dev",
     "astro": "astro",
-    "deploy": "astro build && wrangler pages deploy",
+    "deploy": "gh-pages -d dist",
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241230.0",
+    "gh-pages": "6.3.0",
     "lint-staged": "16.1.2",
     "wrangler": "^3.99.0"
   }

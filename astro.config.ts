@@ -4,4 +4,5 @@ export default defineConfig({
   output: "static",
   prefetch: true,
   compressHTML: true,
+  base: '/amrbr.github.io/',
 });
