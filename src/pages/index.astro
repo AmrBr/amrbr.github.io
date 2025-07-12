@@ -1,0 +1,334 @@
+---
+import Section from "../components/ui/Section.astro";
+import { getCollection, getEntry } from "astro:content";
+import type { CollectionEntry } from "astro:content";
+import BaseLayout from "../components/layout/BaseLayout.astro";
+import ContentList from "../components/shared/ContentList.astro";
+import Container from "../components/ui/Container.astro";
+import { formatDate, formatShortDate } from "../utils/date";
+
+const siteConfig = await getEntry("site", "home");
+if (!siteConfig) {
+  throw new Error("Site configuration not found");
+}
+
+const site = siteConfig.data;
+
+
+
+const writing = await getCollection("writing", ({ data }: CollectionEntry<"writing">) => {
+  return import.meta.env.PROD ? !data.draft : true;
+});
+const latestWriting = writing
+  .sort(
+    (a: CollectionEntry<"writing">, b: CollectionEntry<"writing">) =>
+      b.data.publishedAt.getTime() - a.data.publishedAt.getTime()
+  )
+  .slice(0, 3);
+
+const experiences = await getCollection("experience");
+const sortedExperiences = experiences.sort(
+  (a: CollectionEntry<"experience">, b: CollectionEntry<"experience">) =>
+    b.data.startDate.getTime() - a.data.startDate.getTime()
+);
+
+const education = await getCollection("education");
+const sortedEducation = education.sort(
+  (a: CollectionEntry<"education">, b: CollectionEntry<"education">) =>
+    b.data.startDate.getTime() - a.data.startDate.getTime()
+);
+
+const certifications = await getCollection("certifications");
+const sortedCertifications = certifications.sort(
+  (a: CollectionEntry<"certifications">, b: CollectionEntry<"certifications">) =>
+    b.data.startDate.getTime() - a.data.startDate.getTime()
+);
+
+const projects = await getCollection("projects");
+const featuredProjects = projects.filter((project: CollectionEntry<"projects">) => project.data.featured).slice(0, 3);
+---
+
+<BaseLayout title={`${site.name} - Portfolio`} description={site.introduction}>
+  <Container>
+    <section class="hero">
+      <h1>{site.name}</h1>
+      <p class="subtitle">{site.title}</p>
+      <p class="introduction">{site.introduction}</p>
+      {
+        site.socialLinks && (
+          <div class="social-links">
+            {site.socialLinks.map(({ platform, url }) => (
+              <a href={url} target="_blank" rel="noopener noreferrer">
+                {platform}
+              </a>
+            ))}
+          </div>
+        )
+      }
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <h2>{site.sections.education.title}</h2>
+      </div>
+      <ContentList>
+        {
+          sortedEducation.map((edu) => (
+            <article>
+              <div class="title-row">
+                <div class="company-info">
+                  <img src={edu.data.logo} alt="" class="company-logo" />
+                  <span>{edu.data.title}</span>
+                </div>
+                <time>
+                  {formatShortDate(edu.data.startDate)} - {edu.data.current ? "Present" : (edu.data.endDate ? formatShortDate(edu.data.endDate) : "")}
+                </time>
+              </div>
+              <p class="muted-text">{edu.data.description}</p>
+            </article>
+          ))
+        }
+      </ContentList>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <h2>{site.sections.certifications.title}</h2>
+        <a href="/certifications">{site.sections.certifications.viewAllText}</a>
+      </div>
+      <ContentList>
+        {
+          sortedCertifications.slice(0, 2).map((cert) => (
+            <article>
+              <div class="title-row">
+                <div class="company-info">
+                <img src={cert.data.logo} alt="" class="company-logo" />
+                {cert.data.url ? (
+                  <a href={cert.data.url} target="_blank" rel="noopener noreferrer">
+                    {cert.data.title}
+                  </a>
+                ) : (
+                  <span>{cert.data.title}</span>
+                )}
+              </div>
+              <time>
+                {cert.data.endDate ? formatShortDate(cert.data.endDate) : formatShortDate(cert.data.startDate)}
+              </time>
+            </div>
+            <p class="muted-text">{cert.data.description}</p>
+          </article>
+        ))
+      }
+    </ContentList>
+  </section>
+
+    <section class="section">
+      <div class="section-header">
+        <h2>{site.sections.experience.title}</h2>
+      </div>
+      <ContentList>
+        {
+          sortedExperiences.map((exp) => (
+            <article>
+              <div class="title-row">
+                <div class="company-info">
+                  <img src={exp.data.logo} alt="" class="company-logo" />
+                  <span>{exp.data.title}</span>
+                </div>
+                <time>
+                  {formatShortDate(exp.data.startDate)} - {exp.data.current ? "Present" : (exp.data.endDate ? formatShortDate(exp.data.endDate) : "")}
+                </time>
+              </div>
+              {(exp.data.location || exp.data.workType) && (
+                <div class="meta-info">
+                  {exp.data.location && <span class="location">{exp.data.location}</span>}
+                  {exp.data.workType && <span class="work-type">{exp.data.workType}</span>}
+                </div>
+              )}
+              <p class="muted-text">{exp.data.description}</p>
+              {exp.data.techs && (
+                <div class="tags">
+                  {exp.data.techs.map((tech) => (
+                    <span>{tech}</span>
+                  ))}
+                </div>
+              )}
+            </article>
+          ))
+        }
+      </ContentList>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <h2>{site.sections.projects.title}</h2>
+        <a href="/projects">{site.sections.projects.viewAllText}</a>
+      </div>
+      <ContentList>
+        {
+          featuredProjects.map((project) => (
+            <article>
+              <div class="title-row">
+                <a href={project.data.url} target="_blank" rel="noopener noreferrer">
+                  {project.data.title}
+                </a>
+              </div>
+              <p class="muted-text">{project.data.description}</p>
+              {project.data.techs && (
+                <div class="tags">
+                  {project.data.techs.map((tech) => (
+                    <span>{tech}</span>
+                  ))}
+                </div>
+              )}
+            </article>
+          ))
+        }
+      </ContentList>
+    </section>
+    
+    <Section>
+      <div class="section-header">
+        <h2>{site.sections.writing.title}</h2>
+        <a href="/writing">{site.sections.writing.viewAllText}</a>
+      </div>
+      <ContentList>
+        {
+          latestWriting.map((item) => (
+            <article>
+              <div class="title-row">
+                <a href={`/writing/${item.id}`}>{item.data.title}</a>
+                {item.data.publishedAt && (
+                  <time datetime={item.data.publishedAt.toISOString()}>{formatDate(item.data.publishedAt)}</time>
+                )}
+              </div>
+              <p class="muted-text">{item.data.description}</p>
+              {item.data.tags && (
+                <div class="tags">
+                  {item.data.tags.map((tag) => (
+                    <span>{tag}</span>
+                  ))}
+                </div>
+              )}
+            </article>
+          ))
+        }
+      </ContentList>
+    </Section>
+  </Container>
+</BaseLayout>
+
+<style>
+  main {
+    width: 100%;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 2rem 0;
+  }
+
+  .hero {
+    padding: 4rem 0;
+  }
+
+  .introduction {
+    margin: 1.5rem 0;
+    opacity: 0.9;
+  }
+
+  .section {
+    margin: 4rem 0;
+  }
+
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 2rem;
+    opacity: 0.7;
+  }
+
+  .title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    font-size: var(--text-sm);
+  }
+
+  .company-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .company-logo {
+    width: 1.5rem;
+    height: 1.5rem;
+    object-fit: contain;
+  }
+
+  time {
+    font-size: var(--text-xs);
+    opacity: 0.5;
+    white-space: nowrap;
+  }
+
+  .muted-text {
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+    white-space: pre-line;
+  }
+
+  .meta-info {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 0.25rem;
+    font-size: var(--text-xs);
+    opacity: 0.6;
+  }
+
+  .location {
+    color: var(--text-muted);
+  }
+
+  .work-type {
+    color: var(--text-muted);
+    text-transform: capitalize;
+  }
+
+  .tags {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 0.25rem;
+  }
+
+  .tags span {
+    font-size: var(--text-xs);
+    opacity: 0.5;
+  }
+
+  .social-links {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+    opacity: 0.7;
+  }
+
+  .introduction {
+     white-space: pre-line;
+   }
+
+  @media (max-width: 640px) {
+    main {
+      padding: 1rem 0;
+    }
+
+    .hero {
+      padding: 3rem 0;
+    }
+
+    .container {
+      padding: 0 1rem;
+    }
+  }
+</style>

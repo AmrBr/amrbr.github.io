@@ -1,0 +1,51 @@
+{
+  "home": {
+    "name": "Amr Breekaa",
+    "title": "Software Engineer",
+    "introduction": "I’m a software engineer with broad interests across computer science, particularly in AI, machine learning, and data. I combine practical development with ongoing research and learning to explore new technologies and solve real problems.\n\nThis site highlights my projects and technical writing. I'm open to connecting and collaborating on meaningful work.",
+    "sections": {
+      "experience": {
+        "title": "Experience",
+        "viewAllText": "View full résumé"
+      },
+      "education": {
+        "title": "Education",
+        "viewAllText": "View full résumé"
+      },
+      "certifications": {
+        "title": "Certifications",
+        "viewAllText": "View all certifications"
+      },
+      "projects": {
+        "title": "Projects",
+        "viewAllText": "View all projects"
+      },
+      "writing": {
+        "title": "Writing",
+        "viewAllText": "View all writing"
+      }
+    },
+    "socialLinks": [
+      {
+        "platform": "GitHub",
+        "url": "https://github.com/amrbr"
+      },
+      {
+        "platform": "Twitter",
+        "url": "https://x.com/amrlogs"
+      },
+      {
+        "platform": "LinkedIn",
+        "url": "https://www.linkedin.com/in/amrbreekaa"
+      },
+      {
+        "platform": "Email",
+        "url": "mailto:amrbreekaa@gmail.com"
+      },
+      {
+        "platform": "Resume",
+        "url": "https://drive.google.com/file/d/1ek5WPcndxN37Bs6fY4AInQobrq7Rv5vr/view?usp=share_link"
+      }
+    ]
+  }
+}

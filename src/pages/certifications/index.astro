@@ -1,0 +1,78 @@
+---
+import { getCollection } from "astro:content";
+import type { CollectionEntry } from "astro:content";
+import BaseLayout from "../../components/layout/BaseLayout.astro";
+import BaseHero from "../../components/shared/BaseHero.astro";
+import Container from "../../components/ui/Container.astro";
+import ContentList from "../../components/shared/ContentList.astro";
+import { formatShortDate } from "../../utils/date";
+
+type Certification = CollectionEntry<"certifications">;
+
+const certifications = await getCollection("certifications");
+const sortedCertifications = certifications.sort(
+  (a: Certification, b: Certification) =>
+    b.data.startDate.getTime() - a.data.startDate.getTime()
+);
+
+
+---
+
+<BaseLayout title="Certifications" description="My professional certifications and qualifications">
+  <Container>
+    <BaseHero title="Certifications" description="My professional certifications and qualifications" />
+
+    <ContentList>
+      {
+        sortedCertifications.map((cert) => (
+          <article>
+            <div class="title-row">
+              <div class="company-info">
+                <img src={cert.data.logo} alt="" class="company-logo" />
+                {cert.data.url ? (
+                  <a href={cert.data.url} target="_blank" rel="noopener noreferrer">
+                    {cert.data.title}
+                  </a>
+                ) : (
+                  <span>{cert.data.title}</span>
+                )}
+              </div>
+              <time>
+                {cert.data.endDate ? formatShortDate(cert.data.endDate) : formatShortDate(cert.data.startDate)}
+              </time>
+            </div>
+            <p class="muted-text">{cert.data.description}</p>
+          </article>
+        ))
+      }
+    </ContentList>
+  </Container>
+</BaseLayout>
+
+<style>
+  .title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    font-size: var(--text-sm);
+  }
+
+  .company-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .company-logo {
+    width: 1.5rem;
+    height: 1.5rem;
+    object-fit: contain;
+  }
+
+  time {
+    font-size: var(--text-xs);
+    opacity: 0.5;
+    white-space: nowrap;
+  }
+</style> 
