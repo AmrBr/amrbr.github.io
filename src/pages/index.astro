@@ -48,7 +48,7 @@ const projects = await getCollection("projects");
 const featuredProjects = projects.filter((project: CollectionEntry<"projects">) => project.data.featured).slice(0, 3);
 ---
 
-<BaseLayout title={`${site.name} - Portfolio`} description={site.introduction}>
+<BaseLayout title={`${site.name}`} description={site.introduction}>
   <Container>
     <section class="hero">
       <h1>{site.name}</h1>

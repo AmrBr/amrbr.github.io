@@ -4,10 +4,10 @@ export type NavigationItem = {
 };
 
 export const SITE = {
-    name: "ByteKai",
-    title: "Software Engineer & Curious Tinkerer",
+    name: "Amr Breekaa",
+    title: "Software Engineer",
     description: "Personal portfolio and blog",
-    url: "https://bytekai.dev",
+    url: "https://amrbr.github.io",
     defaultImage: "/default-og-image.jpg",
 } as const;
 
