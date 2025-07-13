@@ -28,6 +28,7 @@ const isActive = (path: string) => {
 
   .nav-links {
     display: flex;
+    flex-wrap: wrap;
     gap: 1.5rem;
   }
 
@@ -37,6 +38,7 @@ const isActive = (path: string) => {
     font-size: var(--text-sm);
     transition: color var(--transition-base);
     position: relative;
+    white-space: nowrap;
   }
 
   a {
@@ -63,5 +65,21 @@ const isActive = (path: string) => {
     width: 100%;
     height: 1px;
     background: var(--text-muted);
+  }
+
+  @media (max-width: 768px) {
+    .nav-links {
+      gap: 1rem;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .nav-links {
+      gap: 0.75rem;
+    }
+    
+    a {
+      font-size: var(--text-xs);
+    }
   }
 </style>

@@ -63,12 +63,14 @@ const sortedProjects = projects.sort((a: Project, b: Project) =>
 
   .tags {
     display: flex;
-    gap: 0.75rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
     margin-top: 0.5rem;
   }
 
   .tags span {
     font-size: var(--text-xs);
     opacity: 0.5;
+    white-space: nowrap;
   }
 </style> 

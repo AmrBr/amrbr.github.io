@@ -11,22 +11,24 @@ const isActive = (path: string) => {
 ---
 
 <nav aria-label="Main navigation">
-  <div class="nav-links" role="menubar">
-    {
-      NAVIGATION.main.map(({ name, path }: NavigationItem, index: number) => (
-        <a
-          href={path}
-          class={isActive(path) ? "active" : ""}
-          role="menuitem"
-          aria-current={isActive(path) ? "page" : undefined}
-          tabindex={index === 0 ? 0 : -1}
-          data-nav-item
-        >
-          <span class="nav-text">{name}</span>
-          {isActive(path) && <span class="sr-only">(current page)</span>}
-        </a>
-      ))
-    }
+  <div class="nav-container">
+    <div class="nav-links" role="menubar">
+      {
+        NAVIGATION.main.map(({ name, path }: NavigationItem, index: number) => (
+          <a
+            href={path}
+            class={isActive(path) ? "active" : ""}
+            role="menuitem"
+            aria-current={isActive(path) ? "page" : undefined}
+            tabindex={index === 0 ? 0 : -1}
+            data-nav-item
+          >
+            <span class="nav-text">{name}</span>
+            {isActive(path) && <span class="sr-only">(current page)</span>}
+          </a>
+        ))
+      }
+    </div>
   </div>
 </nav>
 
@@ -76,14 +78,30 @@ const isActive = (path: string) => {
     background: var(--background);
     z-index: 10;
     padding: 1rem 0;
+    width: 100%;
+    /* REMOVE these properties to disable horizontal scrolling */
+    /* overflow-x: auto; */
+    /* overflow-y: hidden; */
+    /* -webkit-overflow-scrolling: touch; */
+    /* You can set overflow to visible or simply remove the overflow properties if you prefer the default */
+    overflow: visible; /* Ensures content is not clipped and can wrap */
+  }
+
+  .nav-container {
+    width: 100%;
+    max-width: 100%;
   }
 
   .nav-links {
     display: flex;
+    flex-wrap: wrap;
     gap: 1.5rem;
     list-style: none;
     margin: 0;
     padding: 0;
+    width: 100%;
+    justify-content: center;
+    align-items: center;
   }
 
   a {
@@ -95,6 +113,8 @@ const isActive = (path: string) => {
     padding: 0.25rem 0;
     outline: 2px solid transparent;
     outline-offset: 4px;
+    white-space: nowrap; /* Keep this to prevent individual link text from breaking into multiple lines */
+    flex-shrink: 0; /* Keep this to prevent links from shrinking and force them to wrap when space runs out */
   }
 
   a.active::after {
@@ -139,10 +159,23 @@ const isActive = (path: string) => {
   @media (max-width: 768px) {
     .nav-links {
       gap: 1rem;
+      justify-content: flex-start;
     }
 
     a {
       padding: 0.5rem 0;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .nav-links {
+      gap: 0.75rem;
+      justify-content: flex-start;
+    }
+
+    a {
+      padding: 0.25rem 0;
+      font-size: var(--text-xs);
     }
   }
 
