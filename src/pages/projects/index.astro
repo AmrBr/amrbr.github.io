@@ -27,8 +27,7 @@ const sortedProjects = projects.sort((a: Project, b: Project) =>
                 {project.data.title}
               </a>
             </div>
-            <p class="muted-text">{project.data.description}</p>
-            {project.data.techs && (
+            <p class="muted-text" set:html={project.data.description.replaceAll('\n', '<br>')}></p>            {project.data.techs && (
               <div class="tags">
                 {project.data.techs.map((tech) => (
                   <span>{tech}</span>
