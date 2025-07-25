@@ -5,13 +5,14 @@ interface Props {
   url: string;
   date?: Date;
   tags?: string[];
+  rtl?: boolean;
 }
 
-const { title, description, url, date, tags } = Astro.props;
+const { title, description, url, date, tags, rtl } = Astro.props;
 import { formatDate } from "../../utils/date";
 ---
 
-<article>
+<article dir={rtl ? "rtl":"ltr"}>
   <div class="title-row">
     <a href={url}>{title}</a>
     {date && <time datetime={date.toISOString()}>{formatDate(date)}</time>}

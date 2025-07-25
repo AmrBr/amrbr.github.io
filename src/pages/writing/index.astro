@@ -33,6 +33,7 @@ const sortedWriting = writing.sort((a: Writing, b: Writing) => b.data.publishedA
             url={`/writing/${item.id}`}
             date={item.data.publishedAt}
             tags={item.data.tags}
+            rtl={item.data.rtl}
           />
         ))
       }

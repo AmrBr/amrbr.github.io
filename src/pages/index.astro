@@ -195,7 +195,7 @@ const featuredProjects = projects.filter((project: CollectionEntry<"projects">) 
       <ContentList>
         {
           latestWriting.map((item) => (
-            <article>
+            <article dir={item.data.rtl? "rtl":"ltr"}>
               <div class="title-row">
                 <a href={`/writing/${item.id}`}>{item.data.title}</a>
                 {item.data.publishedAt && (

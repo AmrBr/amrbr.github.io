@@ -28,7 +28,7 @@ const formatDate = (date: Date) => {
 
 <BaseLayout title={item.data.title} description={item.data.description}>
   <main>
-    <article class="writing">
+    <article class="writing" dir={item.data.rtl? "rtl":"ltr"}>
       <header>
         <div class="metadata">
           <time datetime={item.data.publishedAt.toISOString()}>
