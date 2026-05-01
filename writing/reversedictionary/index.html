@@ -1,0 +1,989 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Building an Arabic Reverse Dictionary: From TF-IDF to LLMs</title><meta name="description" content="Given an Arabic definition or description, predict the word it describes."><!-- Google Fonts --><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Roboto+Mono:wght@400&display=swap" rel="stylesheet"><link rel="canonical" href="http://localhost:4321/writing/reversedictionary"><meta property="og:type" content="website"><meta property="og:url" content="http://localhost:4321/writing/reversedictionary"><meta property="og:title" content="Building an Arabic Reverse Dictionary: From TF-IDF to LLMs"><meta property="og:description" content="Given an Arabic definition or description, predict the word it describes."><meta property="og:image" content="/default-og-image.jpg"><meta property="twitter:card" content="summary_large_image"><meta property="twitter:url" content="http://localhost:4321/writing/reversedictionary"><meta property="twitter:title" content="Building an Arabic Reverse Dictionary: From TF-IDF to LLMs"><meta property="twitter:description" content="Given an Arabic definition or description, predict the word it describes."><meta property="twitter:image" content="/default-og-image.jpg"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><meta name="generator" content="Astro v5.11.0"><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CtSceO8m.js"></script><script>
+      // Always use dark theme
+      document.documentElement.setAttribute("data-theme", "dark");
+
+      // Handle theme persistence during view transitions
+      document.addEventListener("astro:before-swap", (ev) => {
+        ev.newDocument.documentElement.setAttribute("data-theme", "dark");
+      });
+
+      // Add initial-load class
+      document.addEventListener("DOMContentLoaded", () => {
+        document.body.classList.add("initial-load");
+
+        setTimeout(() => {
+          document.body.classList.remove("initial-load");
+          document.documentElement.classList.add("theme-transition");
+        }, 1000);
+      });
+    </script><script data-goatcounter="https://amrbreekaa.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script><link rel="stylesheet" href="/assets/_type_.DNNIDCyO.css">
+<style>main[data-astro-cid-jxnjfbl4]{width:100%;max-width:640px;margin:0 auto;padding:2rem 1.5rem}.writing[data-astro-cid-jxnjfbl4]{margin-top:2rem}header[data-astro-cid-jxnjfbl4]{margin-bottom:2rem}.metadata[data-astro-cid-jxnjfbl4]{display:flex;gap:1rem;align-items:center;margin-bottom:.5rem}time[data-astro-cid-jxnjfbl4]{color:var(--text-muted);font-size:var(--text-sm)}h1[data-astro-cid-jxnjfbl4]{margin-top:.5rem}.content[data-astro-cid-jxnjfbl4]{line-height:1.7}@media (max-width: 640px){main[data-astro-cid-jxnjfbl4]{padding:1rem}}
+</style></head> <body> <div class="top-glow" data-astro-transition-persist="astro-egz5jgqe-1"></div> <main> <div class="nav-container"> <nav data-astro-cid-o5br4kmp> <div class="nav-links" data-astro-cid-o5br4kmp> <a href="/" class data-astro-cid-o5br4kmp> Home </a><a href="/projects" class data-astro-cid-o5br4kmp> Projects </a><a href="/certifications" class data-astro-cid-o5br4kmp> Certifications </a><a href="/writing" class="active" data-astro-cid-o5br4kmp> Writing </a><a href="/bookmarks" class data-astro-cid-o5br4kmp> Bookmarks </a> </div> </nav>  </div>  <main data-astro-cid-jxnjfbl4> <article class="writing" dir="ltr" data-astro-cid-jxnjfbl4> <header data-astro-cid-jxnjfbl4> <div class="metadata" data-astro-cid-jxnjfbl4> <time datetime="2026-04-30T00:00:00.000Z" data-astro-cid-jxnjfbl4> April 30, 2026 </time> </div> <h1 data-astro-cid-jxnjfbl4>Building an Arabic Reverse Dictionary: From TF-IDF to LLMs</h1> </header> <div class="content" data-astro-cid-jxnjfbl4> <p><em>A step-by-step NLP journey through classical methods, static embeddings, Transformer fine-tuning, and Retrieval-Augmented Generation — all in Arabic.</em></p>
+<hr>
+<h2 id="contents"><strong>Contents</strong></h2>
+<ul>
+<li><a href="#intro">Introduction &#x26; Motivation</a></li>
+<li><a href="#dataset">The Dataset</a></li>
+<li><a href="#exp1-tfidf">Experiment 1 — TF-IDF</a></li>
+<li><a href="#exp2-fasttext-faiss">Experiment 2 — FastText + FAISS</a></li>
+<li><a href="#exp3-transformers">Experiment 3 — Transformers (Zero-Shot)</a></li>
+<li><a href="#exp4-contrastive">Experiment 4 — Contrastive Fine-Tuning</a></li>
+<li><a href="#exp5-llms">Experiment 5 — LLMs (Zero-Shot &#x26; RAG)</a></li>
+<li><a href="#lessons">Lessons Learned &#x26; What’s Next</a></li>
+</ul>
+<hr>
+<p><a id="intro"></a></p>
+<h2 id="1-introduction--motivation"><strong>1. Introduction &#x26; Motivation</strong></h2>
+<p>A reverse dictionary answers a simple question: <em>given a description or meaning, what is the word?</em> It is the tool you reach for when a word is on the tip of your tongue. You know what it means, you just cannot recall the word itself.</p>
+<p>Building one is a surprisingly rich NLP problem. It requires a model that understands the <em>meaning</em> of a definition well enough to map it back to a single lexical item from a vocabulary of tens of thousands of candidates.</p>
+<p>Arabic was chosen deliberately for two reasons. First, Arabic morphology is exceptionally complex — a single root can spawn hundreds of derived word forms through patterns of prefixes, suffixes, and internal vowel changes. This makes tokenization, normalization, and semantic matching genuinely hard. Second, Arabic remains comparatively underserved in NLP research. Most benchmarks and pre-trained models are English-first, which means the design decisions here carry real practical weight.</p>
+<blockquote>
+<p><strong>Note:</strong> This project was built as a deliberate learning curriculum — moving from classical methods to modern LLMs — rather than as a production system. The goal was to understand what each approach gains and loses on a genuinely hard Arabic NLP task. The full code is available on <a href="https://github.com/AmrBr/Reverse-Dictionary">GitHub</a>.</p>
+</blockquote>
+<hr>
+<p><a id="dataset"></a></p>
+<h2 id="2-the-dataset"><strong>2. The Dataset</strong></h2>
+ <br>
+<h3 id="sources"><strong>Sources</strong></h3>
+<p>Data was aggregated from two primary sources:</p>
+<p><strong>KSAA-CAD (Contemporary Arabic Reverse Dictionary):</strong><sup><a href="#ref-1">[1]</a></sup> Derived from three major Arabic dictionaries — the <em>Contemporary Arabic Language Dictionary</em>, <em>Mu’jam Arriyadh</em>, and <em>Al Wassit LMF</em>. Each entry contains a word lemma, a gloss (definition), and a part-of-speech tag. The dataset is linguistically grounded in lemmas rather than roots, and the original source also ships pre-computed contextual embeddings from AraELECTRA, AraBERTv2, and CamelBERT-MSA. A sample entry looks like this:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="json"><code><span class="line"><span style="color:#E1E4E8">{</span></span>
+<span class="line"><span style="color:#79B8FF">  "id"</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"ar.45"</span><span style="color:#E1E4E8">,</span></span>
+<span class="line"><span style="color:#79B8FF">  "word"</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"عين"</span><span style="color:#E1E4E8">,</span></span>
+<span class="line"><span style="color:#79B8FF">  "gloss"</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"عضو الإبصار في ..."</span><span style="color:#E1E4E8">,</span></span>
+<span class="line"><span style="color:#79B8FF">  "pos"</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">"n"</span></span>
+<span class="line"><span style="color:#E1E4E8">}</span></span></code></pre>
+<p>Split sizes: <strong>Train 31,372 / Validation 3,921 / Test 3,922.</strong></p>
+<p><strong>riotu-lab/arabic_reverse_dictionary (Hugging Face):</strong><sup><a href="#ref-2">[2]</a></sup> A secondary dataset in CSV format with two columns <code>word</code> and <code>definition</code>. Train size: <strong>58,607.</strong></p>
+ <br>
+<h3 id="preprocessing-pipeline"><strong>Preprocessing Pipeline</strong></h3>
+<p>All preprocessing was implemented using <strong>CamelTools</strong><sup><a href="#ref-3">[3]</a></sup>, Arabics leading NLP toolkit:</p>
+<ol>
+<li><strong>Normalization:</strong> Metadata columns from KSAA (id, pos, embeddings) were removed to match the structure of the second source.</li>
+<li><strong>De-diacritization:</strong> All tashkeel (short vowel markings) were stripped.</li>
+<li><strong>Tatweel removal:</strong> The elongation character “ـ” was removed.</li>
+<li><strong>Orthographic normalization:</strong> Alef variants (أ، إ، آ → ا), Alef Maksura (ى → ي), and Teh Marbuta (ة → ه) were unified. This is critical in Arabic as the same word can appear with different spellings depending on the typist or source, and without normalization, identical words would be treated as different items.</li>
+<li><strong>Deduplication and merging:</strong> Duplicates within each source were removed before merging into a final dataset of <strong>97,822 entries</strong>, then shuffled and split 80/10/10.</li>
+</ol>
+<br>
+<h3 id="data-integrity--leakage-analysis"><strong>Data Integrity &#x26; Leakage Analysis</strong></h3>
+<p>Before running a single experiment, the data splits were audited carefully.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="left">Metric</th><th align="right">Train</th><th align="right">Val</th><th align="right">Test</th></tr></thead><tbody><tr><td align="left">Total Samples</td><td align="right">76,265</td><td align="right">9,533</td><td align="right">9,534</td></tr><tr><td align="left">Unique Words</td><td align="right">35,310</td><td align="right">7,201</td><td align="right">7,205</td></tr><tr><td align="left">Unique Pairs (Word + Gloss)</td><td align="right">76,265</td><td align="right">9,533</td><td align="right">9,534</td></tr></tbody></table>
+<p><strong>On word overlap:</strong> 4,060 words are shared between Train and Validation, and 4,072 between Train and Test. The task requires identifying the same word from <em>different</em> glosses, so overlap at the word level is expected and desirable.</p>
+<p><strong>On pair overlap (the critical number):</strong> Both Train ∩ Val and Train ∩ Test return <strong>0</strong>. No identical word-gloss pair exists across splits. Critical leakage is <strong>0.00%</strong>.</p>
+<p><strong>Multiple glosses per word:</strong> The dataset contains many words mapped to multiple definitions, which is linguistically realistic. Arabic words are often polysemous. This helps models learn diverse semantic contexts for the same target.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="left">Split</th><th align="right">Multi-Gloss Cases</th></tr></thead><tbody><tr><td align="left">Train</td><td align="right">40,955</td></tr><tr><td align="left">Validation</td><td align="right">2,332</td></tr><tr><td align="left">Test</td><td align="right">2,329</td></tr></tbody></table>
+<p><strong>Target word length:</strong> The vast majority of targets are single tokens, confirming this is primarily a single-word retrieval task.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="center">Word Length (tokens)</th><th align="right">Frequency in Train</th></tr></thead><tbody><tr><td align="center">1</td><td align="right">56,142</td></tr><tr><td align="center">2</td><td align="right">15,476</td></tr><tr><td align="center">3</td><td align="right">3,638</td></tr><tr><td align="center">4</td><td align="right">807</td></tr><tr><td align="center">5+</td><td align="right">202</td></tr></tbody></table>
+<hr>
+<p><a id="exp1-tfidf"></a></p>
+<h2 id="3-experiment-1--tf-idf"><strong>3. Experiment 1 — TF-IDF</strong></h2>
+ <br>
+<h3 id="why-start-here"><strong>Why Start Here?</strong></h3>
+<p>TF-IDF is the obvious baseline: fast, interpretable, requires no GPU, and surprisingly strong for keyword-heavy tasks. For a reverse dictionary with short, precise glosses, it is a reasonable first bet.</p>
+ <br>
+<h3 id="methodology"><strong>Methodology</strong></h3>
+<p>A TF-IDF matrix is built over the training glosses. At inference time, the test gloss is transformed using the same vocabulary and compared against all training glosses via <strong>Cosine Similarity</strong>. The training gloss with the highest similarity maps back to its word, and that word becomes the prediction.</p>
+<p>The two core formula components:</p>
+<p><strong>Term Frequency (TF):</strong> How often a term appears in a specific gloss, normalized by gloss length.</p>
+<p><span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>T</mi><mi>F</mi><mo stretchy="false">(</mo><mi>t</mi><mo separator="true">,</mo><mi>d</mi><mo stretchy="false">)</mo><mo>=</mo><mfrac><mrow><mtext>Number of times term </mtext><mi>t</mi><mtext> appears in doc </mtext><mi>d</mi></mrow><mrow><mtext>Total number of terms in doc </mtext><mi>d</mi></mrow></mfrac></mrow><annotation encoding="application/x-tex">TF(t,d) = \frac{\text{Number of times term } t \text{ appears in doc } d}{\text{Total number of terms in doc } d}</annotation></semantics></math></span></p>
+<p><strong>Inverse Document Frequency (IDF):</strong> How rare a term is across all glosses. Rare terms get higher weight.</p>
+<p><span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>I</mi><mi>D</mi><mi>F</mi><mo stretchy="false">(</mo><mi>t</mi><mo separator="true">,</mo><mi>D</mi><mo stretchy="false">)</mo><mo>=</mo><mi>log</mi><mo>⁡</mo><mrow><mo fence="true">(</mo><mfrac><mrow><mtext>Total number of docs </mtext><mi>N</mi></mrow><mrow><mtext>Number of docs containing </mtext><mi>t</mi></mrow></mfrac><mo fence="true">)</mo></mrow></mrow><annotation encoding="application/x-tex">IDF(t,D) = \log\left(\frac{\text{Total number of docs } N}{\text{Number of docs containing } t}\right)</annotation></semantics></math></span></p>
+ <br>
+<h3 id="vectorizer-configuration"><strong>Vectorizer Configuration</strong></h3>
+<p>The <code>scikit-learn</code> TfidfVectorizer was configured as follows, with rationale for each choice:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="left">Parameter</th><th align="left">Value</th><th align="left">Why</th></tr></thead><tbody><tr><td align="left"><code>analyzer</code></td><td align="left"><code>"word"</code></td><td align="left">Full-word operations, not character n-grams</td></tr><tr><td align="left"><code>ngram_range</code></td><td align="left"><code>(1, 1)</code></td><td align="left">Unigrams only</td></tr><tr><td align="left"><code>min_df</code></td><td align="left"><code>2</code></td><td align="left">Drops rare typos and noise</td></tr><tr><td align="left"><code>max_df</code></td><td align="left"><code>0.95</code></td><td align="left">Filters near-universal stopwords</td></tr><tr><td align="left"><code>max_features</code></td><td align="left"><code>30,000</code></td><td align="left">Caps vocabulary to prevent memory explosion</td></tr><tr><td align="left"><code>sublinear_tf</code></td><td align="left"><code>True</code></td><td align="left">Replaces raw TF with <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mo>+</mo><mi>log</mi><mo>⁡</mo><mo stretchy="false">(</mo><mi>T</mi><mi>F</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">1 + \log(TF)</annotation></semantics></math></span> to compress high-frequency term dominance</td></tr><tr><td align="left"><code>dtype</code></td><td align="left"><code>np.float32</code></td><td align="left">32-bit floats halve memory vs. 64-bit</td></tr></tbody></table>
+ <br>
+<h3 id="results"><strong>Results</strong></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="left">Metric</th><th align="center">Result</th></tr></thead><tbody><tr><td align="left">Top-1 Accuracy</td><td align="center"><strong>18.18%</strong></td></tr><tr><td align="left">Top-5 Accuracy</td><td align="center"><strong>28.40%</strong></td></tr><tr><td align="left">MRR</td><td align="center"><strong>0.2205</strong></td></tr></tbody></table>
+<p>18% Top-1 on a 35,000+ word vocabulary is a meaningful baseline. The result also sets an important benchmark: any approach that claims to add semantic understanding should beat this number. As we will see, that turns out to be harder than expected.</p>
+<hr>
+<p><a id="exp2-fasttext-faiss"></a></p>
+<h2 id="4-experiment-2--fasttext--faiss"><strong>4. Experiment 2 — FastText + FAISS</strong></h2>
+ <br>
+<h3 id="moving-beyond-keywords"><strong>Moving Beyond Keywords</strong></h3>
+<p>The limitation of TF-IDF is that it matches on exact token overlap. If the test gloss uses “مبنى” (building) and the training gloss used “هيكل” (structure), TF-IDF sees two completely different signals even though they are semantically close.</p>
+<p>Static embeddings convert words into dense vectors trained on co-occurrence patterns across large corpora, capturing this kind of semantic proximity. The hope was that a “semantic search” over embedded definitions would outperform keyword matching.</p>
+ <br>
+<h3 id="model-selection-fasttext"><strong>Model Selection: FastText</strong></h3>
+<p><strong>FastText</strong> (<code>cc.ar.300.bin</code>)<sup><a href="#ref-4">[4]</a></sup>, pre-trained by Facebook on the Arabic Common Crawl corpus (2 million words/n-grams), was selected for one key reason: it handles Arabic morphology through <strong>subword n-grams</strong>. Instead of treating “مكتبة” as an atomic unit, FastText breaks it into character n-grams and can construct meaningful vectors for unseen word forms based on shared substrings. For a morphologically rich language where a seen root might appear in an unseen form at test time, this matters.</p>
+ <br>
+<h3 id="methodology-1"><strong>Methodology</strong></h3>
+<p>Each gloss was converted to a <strong>300-dimensional vector</strong> using <strong>mean pooling</strong> — averaging the FastText vectors of all words in the definition. The resulting sentence vectors were indexed using <strong>FAISS</strong><sup><a href="#ref-5">[5]</a></sup> (<code>IndexFlatIP</code>) for efficient nearest-neighbor search. Vectors were L2-normalized before indexing so that inner product search is mathematically equivalent to cosine similarity.</p>
+ <br>
+<h3 id="results-1"><strong>Results</strong></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="left">Metric</th><th align="center">Result</th></tr></thead><tbody><tr><td align="left">Top-1 Accuracy</td><td align="center"><strong>15.04%</strong></td></tr><tr><td align="left">Top-5 Accuracy</td><td align="center"><strong>23.12%</strong></td></tr><tr><td align="left">MRR</td><td align="center"><strong>0.1817</strong></td></tr></tbody></table>
+<p>The semantic approach <em>underperformed</em> TF-IDF by about 3 percentage points across every metric.</p>
+ <br>
+<h3 id="why-did-semantics-hurt"><strong>Why Did Semantics Hurt?</strong></h3>
+<p>This result is counterintuitive but makes complete sense once you look at what mean pooling does to short Arabic glosses.</p>
+<p>TF-IDF automatically down-weights high-frequency terms via the IDF score. Words like “هو”, “الذي”, “في” (he, who, in) are common across all glosses and get near-zero weight. Rare, distinctive terms get high weight. The result is that the TF-IDF vector is dominated by the words that actually <em>distinguish</em> this definition from all others.</p>
+<p>Mean pooling does the opposite. Every word, including common function words, contributes equally to the sentence vector. High-frequency words pull the vector toward a generic, “average Arabic sentence” representation, eroding the distinctive signal that identifies the target word.</p>
+<p>For short, precise dictionary glosses — often just 5–15 words — this dilution effect is severe. The conclusion: <strong>for this kind of task, keyword importance is more valuable than broad semantic meaning, at least with simple averaging.</strong></p>
+<hr>
+<p><a id="exp3-transformers"></a></p>
+<h2 id="5-experiment-3--transformers-zero-shot"><strong>5. Experiment 3 — Transformers (Zero-Shot)</strong></h2>
+ <br>
+<h3 id="why-transformers"><strong>Why Transformers?</strong></h3>
+<p>Both TF-IDF and FastText treat words in isolation. TF-IDF counts tokens; FastText looks up pre-trained word vectors. Neither method understands <em>context</em>. The word “بيت” (house/verse) means something completely different in “بيت الشعر” (a verse of poetry) than in “بيت السكن” (a dwelling). Only a model that reads the entire sentence simultaneously and weights tokens relative to each other can capture this.</p>
+<p>Transformers do exactly this via <strong>self-attention</strong>: every token attends to every other token, producing representations that are context-dependent by design.</p>
+ <br>
+<h3 id="model-selection"><strong>Model Selection</strong></h3>
+<p>Six Arabic-specific transformer models were selected to compare out-of-the-box performance:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="left">Model</th><th align="left">Source</th><th align="left">HuggingFace ID</th></tr></thead><tbody><tr><td align="left">Arabic-BERT<sup><a href="#ref-6">[6]</a></sup></td><td align="left">Ali Safaya</td><td align="left"><code>asafaya/bert-base-arabic</code></td></tr><tr><td align="left">AraElectra<sup><a href="#ref-7">[7]</a></sup></td><td align="left">AubMindLab</td><td align="left"><code>aubmindlab/araelectra-base-discriminator</code></td></tr><tr><td align="left">AraBERT v2<sup><a href="#ref-8">[8]</a></sup></td><td align="left">AubMindLab</td><td align="left"><code>aubmindlab/bert-base-arabertv2</code></td></tr><tr><td align="left">CamelBERT<sup><a href="#ref-11">[11]</a></sup></td><td align="left">CAMeL-Lab</td><td align="left"><code>CAMeL-Lab/bert-base-arabic-camelbert-msa</code></td></tr><tr><td align="left">MARBERT<sup><a href="#ref-10">[10]</a></sup></td><td align="left">UBC-NLP</td><td align="left"><code>UBC-NLP/MARBERT</code></td></tr><tr><td align="left">MARBERTv2<sup><a href="#ref-9">[9]</a></sup></td><td align="left">UBC-NLP</td><td align="left"><code>UBC-NLP/MARBERTv2</code></td></tr></tbody></table>
+ <br>
+<h3 id="the-pipeline"><strong>The Pipeline</strong></h3>
+<p><strong>Tokenization:</strong> Arabic strings are broken into subword units. The word “وبالوالدين” becomes <code>['و', 'ب', 'ال', 'والدين']</code>. Max length was set to 128 tokens — long enough to capture the 95th percentile of gloss lengths, short enough to avoid diluting the representation with excessive padding.</p>
+<p><strong>Encoding:</strong> Only the <strong>Encoder</strong> block is used (not generation). The self-attention mechanism computes token-to-token interaction scores across all 12+ layers, producing a contextual vector for every token.</p>
+<p><strong>Pooling:</strong> Three pooling strategies were tested to collapse token vectors into a single sentence vector:</p>
+<ul>
+<li><strong>Mean Pooling:</strong> Average all token vectors (padding excluded).</li>
+<li><strong>CLS Token:</strong> Use the dedicated <code>[CLS]</code> token vector, designed to represent the full sequence.</li>
+<li><strong>Max Pooling:</strong> Take the maximum value across tokens per dimension, highlighting the most salient features.</li>
+</ul>
+<p><strong>Retrieval:</strong> The test gloss is encoded and compared to all 76k training gloss vectors via cosine similarity. The closest match maps to its word.</p>
+<p><strong>In-Vocab vs. Overall:</strong> Because the training set forms a closed vocabulary, both metrics are reported. In-Vocab measures accuracy when the correct word <em>exists</em> in the training set. Overall measures accuracy across all test samples, including words never seen during training.</p>
+ <br>
+<h3 id="zero-shot-results"><strong>Zero-Shot Results</strong></h3>
+<p><strong>Top-1 Accuracy</strong></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="left">Model</th><th align="center">In-Vocab</th><th align="center">Overall</th></tr></thead><tbody><tr><td align="left"><strong>CamelBERT</strong></td><td align="center"><strong>22.32%</strong></td><td align="center"><strong>14.84%</strong></td></tr><tr><td align="left">MARBERTv2</td><td align="center">16.53%</td><td align="center">10.99%</td></tr><tr><td align="left">MARBERT</td><td align="center">16.17%</td><td align="center">10.75%</td></tr><tr><td align="left">AraBERT</td><td align="center">16.06%</td><td align="center">10.68%</td></tr><tr><td align="left">Arabic-BERT</td><td align="center">16.03%</td><td align="center">10.66%</td></tr><tr><td align="left">AraElectra</td><td align="center">10.09%</td><td align="center">6.71%</td></tr></tbody></table>
+<p><strong>Top-5 Accuracy</strong></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="left">Model</th><th align="center">In-Vocab</th><th align="center">Overall</th></tr></thead><tbody><tr><td align="left"><strong>CamelBERT</strong></td><td align="center"><strong>37.56%</strong></td><td align="center"><strong>24.97%</strong></td></tr><tr><td align="left">MARBERTv2</td><td align="center">27.52%</td><td align="center">18.30%</td></tr><tr><td align="left">MARBERT</td><td align="center">26.18%</td><td align="center">17.41%</td></tr><tr><td align="left">AraBERT</td><td align="center">25.95%</td><td align="center">17.25%</td></tr><tr><td align="left">Arabic-BERT</td><td align="center">25.93%</td><td align="center">17.24%</td></tr><tr><td align="left">AraElectra</td><td align="center">15.95%</td><td align="center">10.60%</td></tr></tbody></table>
+<p><strong>MRR</strong></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="left">Model</th><th align="center">In-Vocab</th><th align="center">Overall</th></tr></thead><tbody><tr><td align="left"><strong>CamelBERT</strong></td><td align="center"><strong>0.30</strong></td><td align="center"><strong>0.20</strong></td></tr><tr><td align="left">MARBERTv2</td><td align="center">0.22</td><td align="center">0.15</td></tr><tr><td align="left">MARBERT</td><td align="center">0.21</td><td align="center">0.14</td></tr><tr><td align="left">AraBERT</td><td align="center">0.21</td><td align="center">0.14</td></tr><tr><td align="left">Arabic-BERT</td><td align="center">0.21</td><td align="center">0.14</td></tr><tr><td align="left">AraElectra</td><td align="center">0.13</td><td align="center">0.09</td></tr></tbody></table>
+ <br>
+<h3 id="key-observations"><strong>Key Observations</strong></h3>
+<p><strong>CamelBERT’s lead:</strong> CamelBERT outperforms its closest competitor (MARBERTv2) by nearly 6 percentage points in Top-1 accuracy. CamelBERT was pre-trained specifically on Modern Standard Arabic (MSA) text, which is the exact register used in formal dictionaries. Its pre-training distribution matches the task distribution better than models trained on more colloquial or mixed-dialect data.</p>
+<p><strong>AraElectra’s poor performance:</strong> AraElectra is an ELECTRA-style model trained as a <em>discriminator</em> — it learns to distinguish real tokens from replaced tokens, not to produce semantically rich sentence representations. This architecture is powerful for classification but is not naturally suited for embedding-based retrieval without fine-tuning. Its poor zero-shot score is expected.</p>
+<p><strong>Overall vs. TF-IDF:</strong> In zero-shot mode, transformers do not beat TF-IDF on overall accuracy. Zero-shot contextual embeddings are not yet calibrated for dictionary retrieval. The next experiment addresses this directly.</p>
+<hr>
+<p><a id="exp4-contrastive"></a></p>
+<h2 id="6-experiment-4--contrastive-fine-tuning"><strong>6. Experiment 4 — Contrastive Fine-Tuning</strong></h2>
+ <br>
+<h3 id="the-core-problem"><strong>The Core Problem</strong></h3>
+<p>Pre-trained transformer embeddings encode general Arabic semantics. But the task here is highly specific: move a gloss vector close to its target word vector and far away from all other word vectors. Without task-specific training, the embedding space has no reason to organize itself around this structure.</p>
+<p><strong>Contrastive learning</strong> directly optimizes for this. Rather than treating word prediction as a 35,000-class classification problem, we frame it as a <strong>dense retrieval alignment task</strong> using the NT-Xent loss.</p>
+ <br>
+<h3 id="architecture"><strong>Architecture</strong></h3>
+<p>Each model is extended with a two-stage architecture:</p>
+<ol>
+<li><strong>Pre-trained Transformer Encoder</strong> — provides contextualized token representations.</li>
+<li><strong>Task-Specific Projection Head</strong> — a single linear layer mapping the model’s hidden dimension to a compact <strong>256-dimensional space</strong>.
+All embeddings are L2-normalized after projection, placing them on a unit hypersphere where cosine similarity equals dot product. This stabilizes gradients and ensures metric compatibility.</li>
+</ol>
+ <br>
+<h3 id="the-nt-xent-loss-infonce"><strong>The NT-Xent Loss (InfoNCE)</strong></h3>
+<p>For each training sample, a gloss <code>g</code> is pulled toward its true target word <code>w⁺</code> and pushed away from <code>N=5</code> randomly sampled distractor words <code>w₁⁻, ..., w₅⁻</code>.</p>
+<p><strong>Step 1 — Compute similarities:</strong></p>
+<p><span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>s</mi><mtext>pos</mtext></msub><mo>=</mo><mi>cos</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mi>z</mi><mi>g</mi></msub><mo separator="true">,</mo><msub><mi>z</mi><msup><mi>w</mi><mo>+</mo></msup></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">s_{\text{pos}} = \cos(z_g, z_{w^+})</annotation></semantics></math></span></p>
+<p><span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>s</mi><mtext>neg</mtext></msub><mo>=</mo><mrow><mo fence="true">[</mo><mi>cos</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mi>z</mi><mi>g</mi></msub><mo separator="true">,</mo><msub><mi>z</mi><msubsup><mi>w</mi><mn>1</mn><mo>−</mo></msubsup></msub><mo stretchy="false">)</mo><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><mi>cos</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mi>z</mi><mi>g</mi></msub><mo separator="true">,</mo><msub><mi>z</mi><msubsup><mi>w</mi><mi>N</mi><mo>−</mo></msubsup></msub><mo stretchy="false">)</mo><mo fence="true">]</mo></mrow></mrow><annotation encoding="application/x-tex">s_{\text{neg}} = \left[\cos(z_g, z_{w_1^-}), \ldots, \cos(z_g, z_{w_N^-})\right]</annotation></semantics></math></span></p>
+<p><strong>Step 2 — Scale by temperature τ = 0.07:</strong></p>
+<p><span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>logits</mtext><mo>=</mo><mrow><mo fence="true">[</mo><mfrac><msub><mi>s</mi><mtext>pos</mtext></msub><mi>τ</mi></mfrac><mo separator="true">,</mo><mfrac><msub><mi>s</mi><mrow><mtext>neg</mtext><mo separator="true">,</mo><mn>1</mn></mrow></msub><mi>τ</mi></mfrac><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><mfrac><msub><mi>s</mi><mrow><mtext>neg</mtext><mo separator="true">,</mo><mi>N</mi></mrow></msub><mi>τ</mi></mfrac><mo fence="true">]</mo></mrow></mrow><annotation encoding="application/x-tex">\text{logits} = \left[\frac{s_{\text{pos}}}{\tau}, \frac{s_{\text{neg},1}}{\tau}, \ldots, \frac{s_{\text{neg},N}}{\tau}\right]</annotation></semantics></math></span></p>
+<p><strong>Step 3 — Cross-entropy with target index 0:</strong></p>
+<p><span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="script">L</mi><mo>=</mo><mo>−</mo><mfrac><mn>1</mn><mi>B</mi></mfrac><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>B</mi></msubsup><mi>log</mi><mo>⁡</mo><mrow><mo fence="true">(</mo><mfrac><mrow><mi>exp</mi><mo>⁡</mo><mo stretchy="false">(</mo><msubsup><mi>s</mi><mtext>pos</mtext><mrow><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo></mrow></msubsup><mi mathvariant="normal">/</mi><mi>τ</mi><mo stretchy="false">)</mo></mrow><mrow><mi>exp</mi><mo>⁡</mo><mo stretchy="false">(</mo><msubsup><mi>s</mi><mtext>pos</mtext><mrow><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo></mrow></msubsup><mi mathvariant="normal">/</mi><mi>τ</mi><mo stretchy="false">)</mo><mo>+</mo><msubsup><mo>∑</mo><mrow><mi>j</mi><mo>=</mo><mn>1</mn></mrow><mi>N</mi></msubsup><mi>exp</mi><mo>⁡</mo><mo stretchy="false">(</mo><msubsup><mi>s</mi><mrow><mtext>neg</mtext><mo separator="true">,</mo><mi>j</mi></mrow><mrow><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo></mrow></msubsup><mi mathvariant="normal">/</mi><mi>τ</mi><mo stretchy="false">)</mo></mrow></mfrac><mo fence="true">)</mo></mrow></mrow><annotation encoding="application/x-tex">\mathcal{L} = -\frac{1}{B} \sum_{i=1}^{B} \log \left( \frac{\exp(s_{\text{pos}}^{(i)} / \tau)}{\exp(s_{\text{pos}}^{(i)} / \tau) + \sum_{j=1}^{N} \exp(s_{\text{neg},j}^{(i)} / \tau)} \right)</annotation></semantics></math></span></p>
+<p>The intuition is direct: if the model correctly identifies the positive pair as most similar, the numerator dominates the denominator and the loss approaches zero. If a distractor outscores the true target, the loss grows large. The temperature τ = 0.07 sharpens the softmax distribution, forcing the model to be confident rather than hedging across candidates.</p>
+ <br>
+<h3 id="negative-sampling"><strong>Negative Sampling</strong></h3>
+<p>Five negatives per gloss were used, sampled randomly from the training vocabulary excluding the true target. All <code>B × N</code> negatives are flattened into a single batch, tokenized, and passed through the transformer in one forward pass before being reshaped to <code>(B, N, 256)</code> for loss computation. This is significantly more efficient than encoding negatives sequentially.</p>
+<p>Five was chosen empirically: fewer negatives produce weak gradients (the model is not challenged enough), while more negatives increase compute without proportional gains in retrieval accuracy.</p>
+ <br>
+<h3 id="training-configuration"><strong>Training Configuration</strong></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="left">Parameter</th><th align="left">Value</th><th align="left">Rationale</th></tr></thead><tbody><tr><td align="left"><code>batch_size</code></td><td align="left">128</td><td align="left">Stable gradient estimates; maximizes GPU utilization</td></tr><tr><td align="left"><code>learning_rate</code></td><td align="left">2e-5</td><td align="left">Standard fine-tuning rate; prevents catastrophic forgetting</td></tr><tr><td align="left"><code>num_epochs</code></td><td align="left">3</td><td align="left">Sufficient for convergence without overfitting</td></tr><tr><td align="left"><code>warmup_steps</code></td><td align="left">500</td><td align="left">Stabilizes early updates when embeddings are noisy</td></tr><tr><td align="left"><code>max_length</code></td><td align="left">128</td><td align="left">Covers ~95th percentile of Arabic gloss lengths</td></tr><tr><td align="left"><code>temperature</code></td><td align="left">0.07</td><td align="left">Empirically optimal for sentence-level contrastive learning</td></tr><tr><td align="left"><code>negative_sample_size</code></td><td align="left">5</td><td align="left">Balances discriminative pressure and memory</td></tr></tbody></table>
+<p>Additional stabilization: AdamW with weight decay applied only to the base transformer; gradient clipping at <code>max_norm=1.0</code>; mixed precision (FP16) via <code>torch.autocast</code> + <code>GradScaler</code> for ~2× training speedup.</p>
+ <br>
+<h3 id="training-loss-per-epoch"><strong>Training Loss Per Epoch</strong></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="left">Model</th><th align="center">Epoch 1</th><th align="center">Epoch 2</th><th align="center">Epoch 3</th><th align="center">Avg. Epoch Duration</th></tr></thead><tbody><tr><td align="left">CamelBERT</td><td align="center">0.3533</td><td align="center">0.1509</td><td align="center">0.1039</td><td align="center">20:31</td></tr><tr><td align="left">MARBERTv2</td><td align="center">1.5419</td><td align="center">0.1987</td><td align="center">0.1335</td><td align="center">19:11</td></tr><tr><td align="left">MARBERT</td><td align="center">0.5900</td><td align="center">0.1966</td><td align="center">0.1146</td><td align="center">19:11</td></tr><tr><td align="left">AraBERT</td><td align="center">0.7003</td><td align="center">0.3246</td><td align="center">0.2607</td><td align="center">21:36</td></tr><tr><td align="left">Arabic-BERT</td><td align="center">0.4569</td><td align="center">0.1965</td><td align="center">0.1187</td><td align="center">20:59</td></tr><tr><td align="left">AraElectra</td><td align="center">0.7004</td><td align="center">0.2425</td><td align="center">0.1658</td><td align="center">21:17</td></tr></tbody></table>
+<p>Note: MARBERTv2’s high Epoch 1 loss (1.54 vs. ~0.5 for others) reflects its larger initial misalignment with the task — but it converges aggressively by Epoch 2.</p>
+ <br>
+<h3 id="fine-tuning-results"><strong>Fine-Tuning Results</strong></h3>
+<p><strong>Top-1 Accuracy</strong></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="left">Model</th><th align="center">In-Vocab</th><th align="center">Overall</th></tr></thead><tbody><tr><td align="left"><strong>CamelBERT</strong></td><td align="center"><strong>41.48%</strong></td><td align="center"><strong>27.59%</strong></td></tr><tr><td align="left">MARBERTv2</td><td align="center">40.60%</td><td align="center">27.00%</td></tr><tr><td align="left">MARBERT</td><td align="center">38.85%</td><td align="center">25.83%</td></tr><tr><td align="left">Arabic-BERT</td><td align="center">39.54%</td><td align="center">26.30%</td></tr><tr><td align="left">AraBERT</td><td align="center">38.20%</td><td align="center">25.40%</td></tr><tr><td align="left">AraElectra</td><td align="center">29.83%</td><td align="center">19.83%</td></tr></tbody></table>
+<p><strong>Top-5 Accuracy</strong></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="left">Model</th><th align="center">In-Vocab</th><th align="center">Overall</th></tr></thead><tbody><tr><td align="left"><strong>CamelBERT</strong></td><td align="center"><strong>59.78%</strong></td><td align="center"><strong>39.75%</strong></td></tr><tr><td align="left">MARBERTv2</td><td align="center">58.41%</td><td align="center">38.84%</td></tr><tr><td align="left">MARBERT</td><td align="center">56.34%</td><td align="center">37.47%</td></tr><tr><td align="left">Arabic-BERT</td><td align="center">55.66%</td><td align="center">37.01%</td></tr><tr><td align="left">AraBERT</td><td align="center">53.85%</td><td align="center">35.81%</td></tr><tr><td align="left">AraElectra</td><td align="center">46.23%</td><td align="center">30.74%</td></tr></tbody></table>
+<p><strong>MRR</strong></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="left">Model</th><th align="center">In-Vocab</th><th align="center">Overall</th></tr></thead><tbody><tr><td align="left">MARBERTv2</td><td align="center">0.49</td><td align="center">0.32</td></tr><tr><td align="left">MARBERT</td><td align="center">0.47</td><td align="center">0.31</td></tr><tr><td align="left">Arabic-BERT</td><td align="center">0.47</td><td align="center">0.31</td></tr><tr><td align="left">AraBERT</td><td align="center">0.46</td><td align="center">0.30</td></tr><tr><td align="left">AraElectra</td><td align="center">0.38</td><td align="center">0.25</td></tr></tbody></table>
+ <br>
+<h3 id="key-observations-1"><strong>Key Observations</strong></h3>
+<p><strong>The equalization effect:</strong> The ~6-point gap between CamelBERT and the other models that existed in zero-shot collapses to ~1–2 points after fine-tuning. Contrastive alignment can overcome initial architectural and pre-training differences. Given enough task-specific signal, most models converge to similar performance levels.</p>
+<p><strong>AraElectra’s recovery:</strong> AraElectra’s Top-1 accuracy nearly <em>tripled</em> (6.71% → 19.83%). This confirms the earlier hypothesis: discriminator models need task-specific training to produce useful semantic embeddings. After fine-tuning, they are competitive.</p>
+<p><strong>Semantic neighborhoods:</strong> The high Top-5 accuracy (~39–40% overall) suggests the models are successfully clustering synonyms and semantically related words near each other. Even when the top prediction is wrong, the correct answer is usually nearby in embedding space.</p>
+<p><strong>Persistent OOV ceiling:</strong> Around 33% of test words do not appear in the training vocabulary at all. For retrieval-based methods, these cases are structurally unsolvable, the correct answer cannot be returned if it was never indexed. This hard ceiling motivates the shift to generative models.</p>
+<hr>
+<p><a id="exp5-llms"></a></p>
+<h2 id="7-experiment-5--llms-zero-shot--rag"><strong>7. Experiment 5 — LLMs (Zero-Shot &#x26; RAG)</strong></h2>
+ <br>
+<h3 id="the-fundamental-shift"><strong>The Fundamental Shift</strong></h3>
+<p>All previous experiments are retrieval tasks operating over a closed vocabulary. They find the best match in an index. This means they literally cannot return a word that was not in their training set.</p>
+<p>LLMs are generative. They can produce any word in the Arabic lexicon, including words never seen during training. This is not just an incremental improvement, it is a different problem formulation.</p>
+ <br>
+<h3 id="hardware--model-selection"><strong>Hardware &#x26; Model Selection</strong></h3>
+<p>All experiments were run locally on a <strong>16GB Apple Silicon</strong> machine. Models were selected for Arabic proficiency and parameter efficiency:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="left">Model</th><th align="left">Source</th><th align="left">Format</th><th align="left">Runtime</th></tr></thead><tbody><tr><td align="left">Gemma-4-E4B<sup><a href="#ref-12">[12]</a></sup></td><td align="left">Google</td><td align="left">GGUF (Q4_K_M)</td><td align="left">LM Studio API</td></tr><tr><td align="left">Qwen3.5-4B<sup><a href="#ref-13">[13]</a></sup></td><td align="left">Alibaba</td><td align="left">MLX (8-bit)</td><td align="left">MLX-LM</td></tr></tbody></table>
+ <br>
+<h3 id="prompt-design"><strong>Prompt Design</strong></h3>
+<p>A single unified prompt was designed to constrain output to a parseable structured format:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>أنت قاموس عكسي للغة العربية. بناءً على التعريف المعطى، اذكر أفضل 5 كلمات عربية تناسب هذا التعريف.</span></span>
+<span class="line"><span> </span></span>
+<span class="line"><span>القواعد:</span></span>
+<span class="line"><span>- أعد فقط قائمة مرقمة من 1 إلى 5</span></span>
+<span class="line"><span>- كل إجابة يجب أن تكون كلمة أو عبارة عربية واحدة فقط</span></span>
+<span class="line"><span>- رتب من الأكثر احتمالاً إلى الأقل</span></span>
+<span class="line"><span>- لا تكتب أي شرح أو نص إضافي</span></span>
+<span class="line"><span>- لا تكرر نفس الكلمة</span></span>
+<span class="line"><span> </span></span>
+<span class="line"><span>التعريف: {definition}</span></span></code></pre>
+<br>
+<h3 id="evaluation-raw-vs-morphological-matching"><strong>Evaluation: Raw vs. Morphological Matching</strong></h3>
+<p>A critical insight emerged during LLM evaluation: <strong>exact string matching severely underestimates LLM performance for Arabic</strong>.</p>
+<p>A model might return “المكتبةُ” while the ground truth is “مكتبه”. Both refer to the same word. Punishing this as incorrect is misleading.</p>
+<p><strong>Morphological matching</strong> was implemented using CAMeL Tools, applying: orthographic normalization (unifying Alef, Teh Marbuta, Alef Maksura), diacritic stripping, tatweel removal, definite article (ال) stripping, lemmatization (plural/dual → singular), and root extraction.</p>
+<p>Additional quality metrics were tracked beyond standard retrieval scores:</p>
+<ul>
+<li><strong>Coverage Rate:</strong> How often the model produced any output at all.</li>
+<li><strong>Prediction Count Distribution:</strong> Whether the model consistently returned exactly 5 predictions.</li>
+<li><strong>Repetition Rate:</strong> How often the same word appeared multiple times in one response.</li>
+<li><strong>Average Prediction Length:</strong> Measures word vs. phrase vs. sentence outputs — shorter is better for a reverse dictionary.</li>
+<li><strong>Language Consistency:</strong> What percentage of predictions were actually Arabic.</li>
+</ul>
+<br>
+<h3 id="rag-implementation"><strong>RAG Implementation</strong></h3>
+<p>RAG was implemented using <strong>ChromaDB</strong><sup><a href="#ref-14">[14]</a></sup>  as the vector database. <strong>intfloat/multilingual-e5-base</strong><sup><a href="#ref-15">[15]</a></sup> was used for embedding generation — it supports 100+ languages including Arabic and is trained on large multilingual corpora. All 76,265 training entries (definitions + words) were embedded with <code>normalize_embeddings=True</code> and persisted to disk.</p>
+<p>At inference time, the test definition is embedded and the top 3 most similar training entries are retrieved. These are injected into the prompt as in-context examples following a consistent pattern:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>التعريف: حلو المنطق، مليح اللفظ.</span></span>
+<span class="line"><span>الإجابة: معسول الكلام</span></span></code></pre>
+<p>This allows the model to observe the expected input-output format from real examples before generating its prediction, reducing hallucination and grounding responses in retrieved context.</p>
+ <br>
+<h3 id="results-zero-shot"><strong>Results: Zero-Shot</strong></h3>
+<p><strong>Raw Matching:</strong></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="left">Model</th><th align="center">Top-1</th><th align="center">Top-5</th><th align="center">MRR</th></tr></thead><tbody><tr><td align="left">Qwen3.5</td><td align="center">10.50%</td><td align="center">16.60%</td><td align="center">0.1310</td></tr></tbody></table>
+<p><strong>Morphological Matching:</strong></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="left">Model</th><th align="center">Top-1</th><th align="center">Top-5</th><th align="center">MRR</th></tr></thead><tbody><tr><td align="left">Qwen3.5</td><td align="center"><strong>26.25%</strong></td><td align="center"><strong>50.40%</strong></td><td align="center"><strong>0.4163</strong></td></tr></tbody></table>
+<p><strong>Quality Metrics:</strong></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="left">Model</th><th align="center">Coverage</th><th align="center">Repetition Rate</th><th align="center">Avg. Word Length</th><th align="center">Language Consistency</th></tr></thead><tbody><tr><td align="left">Qwen3.5</td><td align="center">100%</td><td align="center">26.30%</td><td align="center">1.36</td><td align="center">99.62%</td></tr></tbody></table>
+ <br>
+<h3 id="results-rag"><strong>Results: RAG</strong></h3>
+<p><strong>Raw Matching:</strong></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="left">Model</th><th align="center">Top-1</th><th align="center">Top-5</th><th align="center">MRR</th></tr></thead><tbody><tr><td align="left">Qwen3.5</td><td align="center">25.90%</td><td align="center">33.10%</td><td align="center">0.2890</td></tr></tbody></table>
+<p><strong>Morphological Matching:</strong></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="left">Model</th><th align="center">Top-1</th><th align="center">Top-5</th><th align="center">MRR</th></tr></thead><tbody><tr><td align="left">Qwen3.5</td><td align="center"><strong>39.82%</strong></td><td align="center"><strong>62.60%</strong></td><td align="center"><strong>0.5462</strong></td></tr></tbody></table>
+<p><strong>Quality Metrics:</strong></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th align="left">Model</th><th align="center">Coverage</th><th align="center">Repetition Rate</th><th align="center">Avg. Word Length</th><th align="center">Language Consistency</th></tr></thead><tbody><tr><td align="left">Qwen3.5</td><td align="center">100%</td><td align="center">25.50%</td><td align="center">1.35</td><td align="center">99.94%</td></tr></tbody></table>
+<blockquote>
+<p><strong>Note:</strong> Due to hardware constraints, LLM results are based on a 1,000-sample subset of the test set.</p>
+</blockquote>
+ <br>
+<h3 id="key-observations-2"><strong>Key Observations</strong></h3>
+<p><strong>The 2.5× morphological gap:</strong> Raw Top-1 for Qwen zero-shot is 10.50%. After morphological normalization it jumps to 26.25% — a 2.5× increase. This is not noise; it reflects the genuine richness of Arabic morphology. The model is producing <em>correct</em> answers that exact string matching refuses to credit. Evaluation methodology matters as much as model selection.</p>
+<p><strong>RAG’s impact:</strong> RAG improved morphological Top-1 from 26.25% to 39.82% and Top-5 from 50.40% to 62.60%. Providing three contextually relevant examples from the training dataset helped the model understand the expected output format and reduced hallucination.</p>
+<p><strong>OOV as a structural advantage:</strong> Unlike all retrieval-based methods, LLMs are not constrained to a closed vocabulary. Any word in Arabic can be a valid prediction. This fundamentally changes the nature of the task and explains a large part of the performance gain.</p>
+<p><strong>The reasoning loop problem:</strong> Qwen3.5 has a tendency to generate internal chain-of-thought reasoning even when instructed to produce only a list. This consumed tokens and slowed inference significantly across the 1,000-sample test. Models designed primarily for instruction-following rather than reasoning-first generation would be more efficient here.</p>
+<p><strong>Gemma’s verbosity:</strong> Gemma 4 consistently generated verbose preambles before the numbered list, exhausting the token budget before producing parseable output. Multiple prompt engineering strategies were attempted: restructuring the prompt, English-only instructions, separating system/user/assistant turns, disabling reasoning modes, increasing max tokens, and adjusting temperature. None produced consistently parseable output. The issue likely reflects a mismatch between Gemma’s generation priorities (verbose, explanatory) and this task’s requirements (compact, structured). Gemma is not excluded because it is a poor model, it may simply be poorly suited to this specific output format constraint.</p>
+<p><strong>Zero-shot by design:</strong> All LLM results here use zero-shot inference with no fine-tuning. The performance gains over fine-tuned transformers are achieved without any task-specific optimization. Fine-tuning these models would likely push results significantly higher.</p>
+<p><strong>Dataset ambiguity:</strong> Some glosses in the dataset are genuinely ambiguous, multiple words legitimately satisfy the same definition. A model producing a semantically valid but non-ground-truth word appears incorrect in evaluation even when it is right. This is an inherent limitation of single-label evaluation on a task where multiple correct answers exist.</p>
+<hr>
+<p><a id="lessons"></a></p>
+<h2 id="8-lessons-learned--whats-next"><strong>8. Lessons Learned &#x26; What’s Next</strong></h2>
+<br>
+<h3 id="what-is-learned-from-the-experiments-personal-opinion"><strong>What is learned from the Experiments (Personal Opinion)</strong></h3>
+<p><strong>Keywords beat semantics on short glosses.</strong> TF-IDF outperformed FastText because IDF automatically identifies the distinguishing terms in a definition. Mean pooling erases this signal. If you must use static embeddings, a weighted pooling strategy (TF-IDF weights applied to word vectors) would likely outperform simple averaging.</p>
+<p><strong>Contrastive learning is a genuine multiplier.</strong> Fine-tuning roughly doubled zero-shot transformer performance across every model and every metric. The NT-Xent loss forces the embedding space to organize itself around the specific retrieval task, which zero-shot pre-training cannot achieve.</p>
+<p><strong>Retrieval has a hard OOV ceiling.</strong> Approximately one third of test words do not appear in the training vocabulary. No retrieval-based method — regardless of how sophisticated the embeddings — can solve these cases. Generative models break this ceiling entirely.</p>
+<p><strong>Evaluation methodology is not neutral.</strong> The 2.5× gap between raw and morphological matching scores for Arabic LLMs shows that exact-string evaluation significantly underestimates model performance on morphologically rich languages. This is not an Arabic-specific problem, it applies to any highly inflected language.</p>
+<p><strong>Model architecture matters most at zero-shot; matters less after fine-tuning.</strong> CamelBERT’s 6-point lead at zero-shot shrinks to 1–2 points after fine-tuning. Task-specific training is a strong equalizer.</p>
+ <br>
+<h3 id="what-could-come-next"><strong>What Could Come Next</strong></h3>
+<ul>
+<li><strong>Weighted pooling for static embeddings:</strong> Apply TF-IDF weights to FastText word vectors before averaging. This should recover much of the IDF signal that mean pooling loses.</li>
+<li><strong>Larger LLMs:</strong> The experiments here used 4B parameter models on constrained hardware. Even a 7B or 13B Arabic-specialized model (e.g., Jais, ALLaM) would likely show significant gains.</li>
+<li><strong>LLM fine-tuning:</strong> All LLM results are zero-shot. Supervised fine-tuning or instruction tuning on the training data would likely push morphological Top-1 substantially higher.</li>
+<li><strong>Harder negative mining:</strong> Random negatives in contrastive training are easy to distinguish. Using semantically similar but incorrect words as negatives (hard negatives) would force the model to learn finer-grained distinctions.</li>
+<li><strong>Multi-label evaluation:</strong> Rather than scoring against a single ground truth, evaluating against all semantically valid answers for a given definition would produce more honest metrics and reward models that produce legitimate synonyms.</li>
+<li><strong>Gemma revisited:</strong> Gemma’s verbosity may be solvable with grammar-constrained decoding or structured output forcing. This is worth investigating.</li>
+</ul>
+<hr>
+<h2 id="references">References</h2>
+<p><a id="ref-1"></a>1. <a href="https://arai.ksaa.gov.sa/sharedTask/">KSAA-CAD</a> - Contemporary Arabic Reverse Dictionary Dataset</p>
+<p><a id="ref-2"></a>2. <a href="https://huggingface.co/datasets/riotu-lab/arabic_reverse_dictionary">riotu-lab/arabic_reverse_dictionary</a> — Hugging Face</p>
+<p><a id="ref-3"></a>3. <a href="https://github.com/CAMeL-Lab/camel_tools">CAMeL Tools</a> — Arabic NLP Toolkit</p>
+<p><a id="ref-4"></a>4. <a href="https://fasttext.cc/docs/en/crawl-vectors.html">FastText Arabic Vectors</a> — <code>cc.ar.300.bin</code></p>
+<p><a id="ref-5"></a>5. <a href="https://github.com/facebookresearch/faiss">FAISS</a> — Facebook AI Similarity Search</p>
+<p><a id="ref-6"></a>6. <a href="https://huggingface.co/asafaya/bert-base-arabic">Arabic Bert</a> - Hugging Face</p>
+<p><a id="ref-7"></a>7. <a href="https://huggingface.co/aubmindlab/araelectra-base-discriminator">AraElectra</a> - Hugging Face</p>
+<p><a id="ref-8"></a>8. <a href="https://huggingface.co/aubmindlab/bert-base-arabertv2">AraBERT v2</a> — AubMindLab</p>
+<p><a id="ref-9"></a>9. <a href="https://huggingface.co/UBC-NLP/MARBERTv2">MARBERTv2</a> — UBC NLP</p>
+<p><a id="ref-10"></a>10. <a href="https://huggingface.co/UBC-NLP/MARBERT">MARBERT</a> — UBC NLP</p>
+<p><a id="ref-11"></a>11. <a href="https://huggingface.co/CAMeL-Lab/bert-base-arabic-camelbert-msa">CamelBERT</a> — CAMeL Lab</p>
+<p><a id="ref-12"></a>12. <a href="https://huggingface.co/google/gemma-4-E4B">Gemma 4 E4B</a> — Google</p>
+<p><a id="ref-13"></a>13. <a href="https://huggingface.co/Qwen/Qwen3.5-4B">Qwen3.5 4B</a> — Alibaba</p>
+<p><a id="ref-14"></a>14. <a href="https://www.trychroma.com/">ChromaDB</a> — Vector Database</p>
+<p><a id="ref-15"></a>15. <a href="https://huggingface.co/intfloat/multilingual-e5-base">intfloat/multilingual-e5-base</a> — Multilingual Embeddings</p>
+<p><a id="ref-16"></a>16. <a href="https://github.com/AmrBr/Reverse-Dictionary">Codebase</a> — Full Codebase on Github</p> </div> </article> </main>  </main> <div class="bottom-glow" data-astro-transition-persist="astro-grzff4s5-2"></div> </body></html> 
