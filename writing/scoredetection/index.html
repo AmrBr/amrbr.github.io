@@ -1,0 +1,894 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>A Technical Deep-Dive into AI-Powered Archery Score Detection</title><meta name="description" content="From a single photo to a full scorecard: building a computer vision pipeline that detects arrows and scores an archery target automatically."><!-- Google Fonts --><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Roboto+Mono:wght@400&display=swap" rel="stylesheet"><link rel="canonical" href="http://localhost:4321/writing/scoredetection"><meta property="og:type" content="website"><meta property="og:url" content="http://localhost:4321/writing/scoredetection"><meta property="og:title" content="A Technical Deep-Dive into AI-Powered Archery Score Detection"><meta property="og:description" content="From a single photo to a full scorecard: building a computer vision pipeline that detects arrows and scores an archery target automatically."><meta property="og:image" content="/default-og-image.jpg"><meta property="twitter:card" content="summary_large_image"><meta property="twitter:url" content="http://localhost:4321/writing/scoredetection"><meta property="twitter:title" content="A Technical Deep-Dive into AI-Powered Archery Score Detection"><meta property="twitter:description" content="From a single photo to a full scorecard: building a computer vision pipeline that detects arrows and scores an archery target automatically."><meta property="twitter:image" content="/default-og-image.jpg"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><meta name="generator" content="Astro v5.11.0"><meta name="astro-view-transitions-enabled" content="true"><meta name="astro-view-transitions-fallback" content="animate"><script type="module" src="/_astro/ClientRouter.astro_astro_type_script_index_0_lang.CtSceO8m.js"></script><script>
+      // Always use dark theme
+      document.documentElement.setAttribute("data-theme", "dark");
+
+      // Handle theme persistence during view transitions
+      document.addEventListener("astro:before-swap", (ev) => {
+        ev.newDocument.documentElement.setAttribute("data-theme", "dark");
+      });
+
+      // Add initial-load class
+      document.addEventListener("DOMContentLoaded", () => {
+        document.body.classList.add("initial-load");
+
+        setTimeout(() => {
+          document.body.classList.remove("initial-load");
+          document.documentElement.classList.add("theme-transition");
+        }, 1000);
+      });
+    </script><script data-goatcounter="https://amrbreekaa.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script><link rel="stylesheet" href="/assets/_type_.BzstcMRk.css">
+<style>main[data-astro-cid-jxnjfbl4]{width:100%;max-width:640px;margin:0 auto;padding:2rem 1.5rem}.writing[data-astro-cid-jxnjfbl4]{margin-top:2rem}header[data-astro-cid-jxnjfbl4]{margin-bottom:2rem}.metadata[data-astro-cid-jxnjfbl4]{display:flex;gap:1rem;align-items:center;margin-bottom:.5rem}time[data-astro-cid-jxnjfbl4]{color:var(--text-muted);font-size:var(--text-sm)}h1[data-astro-cid-jxnjfbl4]{margin-top:.5rem}.content[data-astro-cid-jxnjfbl4]{line-height:1.7}@media (max-width: 640px){main[data-astro-cid-jxnjfbl4]{padding:1rem}}
+</style></head> <body> <div class="top-glow" data-astro-transition-persist="astro-egz5jgqe-1"></div> <main> <div class="nav-container"> <nav data-astro-cid-o5br4kmp> <div class="nav-links" data-astro-cid-o5br4kmp> <a href="/" class data-astro-cid-o5br4kmp> Home </a><a href="/projects" class data-astro-cid-o5br4kmp> Projects </a><a href="/certifications" class data-astro-cid-o5br4kmp> Certifications </a><a href="/writing" class="active" data-astro-cid-o5br4kmp> Writing </a><a href="/bookmarks" class data-astro-cid-o5br4kmp> Bookmarks </a> </div> </nav>  </div>  <main data-astro-cid-jxnjfbl4> <article class="writing" dir="ltr" data-astro-cid-jxnjfbl4> <header data-astro-cid-jxnjfbl4> <div class="metadata" data-astro-cid-jxnjfbl4> <time datetime="2026-05-21T00:00:00.000Z" data-astro-cid-jxnjfbl4> May 21, 2026 </time> </div> <h1 data-astro-cid-jxnjfbl4>A Technical Deep-Dive into AI-Powered Archery Score Detection</h1> </header> <div class="content" data-astro-cid-jxnjfbl4> <p><em>Archery scoring is deceptively tedious. After every “end” (a set of 3 or 6 arrows), an archer walks to the target, reads each arrow’s position by eye, announces the score to a recorder, pulls the arrows, and walks back. Multiply that by 20+ ends in a competition and you have a process that is slow, fatigue-prone, and entirely dependent on human judgment for calls near ring boundaries.</em></p>
+<p><em>The goal of this project was straightforward: photograph the target, get the scores back instantly. But making that work reliably across different lighting conditions, camera angles, arrow densities, and target sizes turned out to involve a non-trivial set of problems, dataset engineering, model selection, perspective geometry, and a custom scoring engine. This post covers every decision in full detail.</em></p>
+<blockquote>
+<p>The full code is available on <a href="https://github.com/Archery-Xpert/Score-Detection.git">GitHub</a>.</p>
+</blockquote>
+<hr>
+<h2 id="table-of-contents"><strong>Table of Contents</strong></h2>
+<ul>
+<li><a href="#project-vision--scope">Project Vision &#x26; Scope</a></li>
+<li><a href="#data-engineering--methodology">Data Engineering &#x26; Methodology</a></li>
+<li><a href="#model-architecture-yolo26">Model Architecture: YOLO26</a></li>
+<li><a href="#training-hyperparameters--every-setting-explained">Training Hyperparameters — Every Setting Explained</a></li>
+<li><a href="#performance-metrics--what-they-mean-in-this-context">Performance Metrics — What They Mean in This Context</a></li>
+<li><a href="#performance-results--full-analysis">Performance Results &#x26; Full Analysis</a></li>
+<li><a href="#scoring-logic--integration-pipeline">Scoring Logic &#x26; Integration Pipeline</a></li>
+<li><a href="#limitations-known-issues--whats-next">Limitations, Known Issues &#x26; What’s Next</a></li>
+</ul>
+<hr>
+<h2 id="project-vision--scope"><strong>Project Vision &#x26; Scope</strong></h2>
+<p>The core objective is the <strong>automation of the scoring pipeline</strong>. Traditionally, archers must walk to the target and manually record scores, a process prone to human error and fatigue. This project allows users to simply photograph the target; the AI identifies the arrows and computes their values instantly.</p>
+<h3 id="target-agnostic-design"><strong>Target-Agnostic Design</strong></h3>
+<p>While the MVP focuses on <strong>World Archery (WA) outdoor target faces</strong> (122cm and 80cm) using the standard <strong>10-zone scoring system</strong>, the architectural logic is target-agnostic. By identifying universal structural markers rather than predicting static scores, the system is designed for seamless adaptation to:</p>
+<ul>
+<li><strong>Indoor Archery:</strong> Triple-spot or 40cm faces</li>
+<li><strong>Custom Targets:</strong> Proprietary club or training faces</li>
+</ul>
+<hr>
+<h2 id="data-engineering--methodology"><strong>Data Engineering &#x26; Methodology</strong></h2>
+<p>A high-performance model is only as good as the data it consumes. The dataset was engineered to maintain reliability across extreme lighting conditions, various camera angles, and differing arrow densities.</p>
+<h3 id="data-sourcing--curation"><strong>Data Sourcing &#x26; Curation</strong></h3>
+<p>I aggregated a raw pool of <strong>3,700 images</strong> from four specialized repositories on Roboflow:</p>
+<ul>
+<li><code>archery-skmsa/archery</code><sup><a href="#ref-1">[1]</a></sup></li>
+<li><code>uni-oidi4/archery</code><sup><a href="#ref-2">[2]</a></sup></li>
+<li><code>archery-scoring/Archery Scoring</code><sup><a href="#ref-3">[3]</a></sup></li>
+<li><code>shrutiharshil/DJS Phoenix</code><sup><a href="#ref-4">[4]</a></sup></li>
+</ul>
+<p>Through a rigorous <strong>filtering phase</strong>, I discarded low-resolution frames, redundant images, and poorly labeled samples. This resulted in a refined set of <strong>250 high-variance images</strong> chosen specifically for the fine-tuning phase.</p>
+<h3 id="geometric-pre-processing-segmentation--detection"><strong>Geometric Pre-processing: Segmentation → Detection</strong></h3>
+<p>A significant challenge identified during data auditing was a label format mismatch: several classes (notably <code>arrow_shaft</code>) were labeled as <strong>polygons (segmentation)</strong> rather than <strong>bounding boxes (detection)</strong>. To maintain consistency without the labor-intensive process of manual re-labeling, I implemented a custom Python script.</p>
+<p>The script calculates the extreme coordinates of the polygon vertices <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><msub><mi>x</mi><mi>min</mi><mo>⁡</mo></msub><mo separator="true">,</mo><msub><mi>y</mi><mi>min</mi><mo>⁡</mo></msub><mo separator="true">,</mo><msub><mi>x</mi><mi>max</mi><mo>⁡</mo></msub><mo separator="true">,</mo><msub><mi>y</mi><mi>max</mi><mo>⁡</mo></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(x_{\min}, y_{\min}, x_{\max}, y_{\max})</annotation></semantics></math></span> to derive the bounding box center <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><msub><mi>c</mi><mi>x</mi></msub><mo separator="true">,</mo><msub><mi>c</mi><mi>y</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(c_x, c_y)</annotation></semantics></math></span> and dimensions <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mi>w</mi><mo separator="true">,</mo><mi>h</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(w, h)</annotation></semantics></math></span>, effectively converting segmentation masks into YOLO-compatible detection labels.</p>
+<h3 id="augmentation-strategy"><strong>Augmentation Strategy</strong></h3>
+<p>To increase model robustness, we applied the following augmentations via Roboflow, expanding the training set to <strong>525 images</strong> (70/20/10 split):</p>
+<ul>
+<li><strong>Horizontal Flip:</strong> Mirrors the target to handle different approach angles.</li>
+<li><strong>Brightness (-25% to +25%):</strong> Simulates varying outdoor conditions (overcast vs. direct sun).</li>
+<li><strong>Blur &#x26; Noise:</strong> Mimics low-quality smartphone sensors or slight motion blur during handheld capture.</li>
+</ul>
+<h3 id="labeling-strategy-for-geometric-scoring"><strong>Labeling Strategy for Geometric Scoring</strong></h3>
+<p>The four classes and their specific roles in the pipeline:</p>
+<ul>
+<li><strong><code>arrow_shaft</code>:</strong> Identifies the arrow body to assist the model in distinguishing arrows from target lines, and is used later to refine tip position via shaft direction.</li>
+<li><strong><code>arrow_tip</code>:</strong> The <strong>primary key</strong> for scoring, represents the precise point of impact.</li>
+<li><strong><code>target_center</code>:</strong> Defines the absolute origin (0,0) in the target’s coordinate system.</li>
+<li><strong><code>target_face</code>:</strong> A 4-point detection identifying target boundaries.</li>
+</ul>
+<blockquote>
+<p>Dataset hosted on Roboflow under <strong>archeryxpert-score-detection</strong><sup><a href="#ref-5">[5]</a></sup>.</p>
+</blockquote>
+<h4 id="class-distribution"><strong>Class Distribution:</strong></h4>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Class</th><th>Count</th></tr></thead><tbody><tr><td>arrow_shaft</td><td>2,742</td></tr><tr><td>arrow_tip</td><td>2,577</td></tr><tr><td>target_center</td><td>519</td></tr><tr><td>target_face</td><td>519</td></tr></tbody></table>
+<figure>
+  <img src="/images/score_detection/sample.png" alt="Archery target sample">
+  <figcaption>Figure 1. Archery target sample.</figcaption>
+</figure>
+<hr>
+<h2 id="model-architecture-yolo26"><strong>Model Architecture: YOLO26</strong></h2>
+<p>The project uses <strong>YOLO26</strong><sup><a href="#ref-6">[6]</a></sup>, the state-of-the-art standard in the YOLO family as of early 2026.</p>
+<h3 id="architectural-advantages"><strong>Architectural Advantages</strong></h3>
+<p><strong>NMS-Free (End-to-End):</strong> Traditional YOLO models use Non-Maximum Suppression to filter duplicate bounding boxes as a post-processing step. This adds latency. YOLO26 uses a direct prediction method that outputs final detections without NMS, making it significantly faster for mobile deployment.</p>
+<p><strong>CPU Optimization:</strong> The <strong>Nano variant (YOLO26n)</strong> is specifically tuned for edge hardware, showing a ~43% speed increase on mobile CPUs compared to YOLO11. This matters for the intended deployment target, which is a mobile app processing one image per end.</p>
+<p><strong>MuSGD Optimizer:</strong> By integrating <strong>Muon-style optimization</strong> (initially developed for LLM training), the model achieves more stable convergence. This is particularly important when training on smaller, specialized datasets where gradient noise is a bigger problem.</p>
+<h3 id="dataset-structure"><strong>Dataset Structure</strong></h3>
+<p>The model expects a standardized directory structure:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>/images   — image files</span></span>
+<span class="line"><span>/labels   — paired .txt files where each label contains: class_id | cx | cy | w | h</span></span>
+<span class="line"><span>data.yaml — defines paths and class names: ['arrow_shaft', 'arrow_tip', 'target_center', 'target_face']</span></span></code></pre>
+<hr>
+<h2 id="training-hyperparameters--every-setting-explained"><strong>Training Hyperparameters — Every Setting Explained</strong></h2>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#85E89D">epochs</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">100</span></span>
+<span class="line"><span style="color:#85E89D">imgsz</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">640</span></span>
+<span class="line"><span style="color:#85E89D">batch</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">16</span></span>
+<span class="line"><span style="color:#85E89D">optimizer</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">AdamW</span></span>
+<span class="line"><span style="color:#85E89D">lr0</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">0.001</span></span>
+<span class="line"><span style="color:#85E89D">lrf</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">0.01</span></span>
+<span class="line"><span style="color:#85E89D">warmup_epochs</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">3</span></span>
+<span class="line"><span style="color:#85E89D">weight_decay</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">0.0005</span></span>
+<span class="line"><span style="color:#85E89D">hsv_h</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">0.015</span></span>
+<span class="line"><span style="color:#85E89D">hsv_s</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">0.7</span></span>
+<span class="line"><span style="color:#85E89D">hsv_v</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">0.4</span></span>
+<span class="line"><span style="color:#85E89D">translate</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">0.1</span></span>
+<span class="line"><span style="color:#85E89D">scale</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">0.5</span></span>
+<span class="line"><span style="color:#85E89D">fliplr</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">0.5</span></span>
+<span class="line"><span style="color:#85E89D">mosaic</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">1.0</span></span>
+<span class="line"><span style="color:#85E89D">degrees</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">0.0</span></span>
+<span class="line"><span style="color:#85E89D">dropout</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">0.1</span></span>
+<span class="line"><span style="color:#85E89D">patience</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">20</span></span>
+<span class="line"><span style="color:#85E89D">save</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">true</span></span>
+<span class="line"><span style="color:#85E89D">save_period</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">10</span></span>
+<span class="line"><span style="color:#85E89D">plots</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">true</span></span>
+<span class="line"><span style="color:#85E89D">project</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">archery_yolo26</span></span>
+<span class="line"><span style="color:#85E89D">name</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">v1</span></span>
+<span class="line"><span style="color:#85E89D">exist_ok</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">true</span></span>
+<span class="line"><span style="color:#85E89D">device</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">0</span></span>
+<span class="line"><span style="color:#85E89D">workers</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">2</span></span>
+<span class="line"><span style="color:#85E89D">cache</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">true</span></span></code></pre>
+<h3 id="core-settings"><strong>Core Settings</strong></h3>
+<p><strong><code>epochs=100</code>:</strong> One epoch means the model sees every training image once. 100 epochs means it sees every image 100 times, adjusting its weights slightly after each batch. With <code>patience=20</code> it will stop early if it stops improving, so it won’t necessarily run all 100.</p>
+<p><strong><code>imgsz=640</code>:</strong> Every image gets resized to 640×640 before the model processes it. This is fixed for the entire training run and must match at inference time. 640 is the standard, large enough to resolve small objects like arrow tips, small enough to run fast.</p>
+<p><strong><code>batch=16</code>:</strong> Instead of processing one image at a time, it processes 16 simultaneously. Larger batches produce more stable gradient estimates and allow faster training.</p>
+<h3 id="optimizer-settings"><strong>Optimizer Settings</strong></h3>
+<p><strong><code>optimizer='AdamW'</code>:</strong> The algorithm that adjusts model weights after each batch. AdamW is better than the default SGD for small datasets because it adapts the learning rate per parameter automatically, essentially a smarter version of gradient descent. When you only have 500 training images, this adaptability makes a meaningful difference.</p>
+<p><strong><code>lr0=0.001</code>:</strong> Initial learning rate — how large each weight update step is. 0.001 is a standard starting value. Too high and the model overshoots and learns nothing; too low and training takes forever.</p>
+<p><strong><code>lrf=0.01</code>:</strong> Final learning rate as a fraction of <code>lr0</code>. The learning rate decays from 0.001 down to <code>0.001 × 0.01 = 0.00001</code> over the course of training. This is called learning rate scheduling, start with bigger steps to learn fast, finish with tiny steps to fine-tune precisely.</p>
+<p><strong><code>warmup_epochs=3</code>:</strong> For the first 3 epochs, the learning rate starts near zero and gradually increases to <code>lr0</code>. Without warmup, the first few batches can cause large unstable weight updates that damage the entire training run. Warmup prevents this cold-start problem.</p>
+<p><strong><code>weight_decay=0.0005</code>:</strong> L2 regularization that adds a small penalty for having large weights. This prevents overfitting by discouraging the model from memorizing training images. It keeps the model’s learned representations general rather than specialized to the specific training examples it has seen.</p>
+<h3 id="augmentation-settings"><strong>Augmentation Settings</strong></h3>
+<p>These are applied randomly to training images every epoch. The model sees a slightly different version of each image every time, which artificially multiplies the dataset and teaches robustness.</p>
+<p><strong><code>hsv_h=0.015</code>:</strong> Randomly shifts the hue by up to 1.5%. Teaches the model that slightly different-colored arrows and targets are the same thing.</p>
+<p><strong><code>hsv_s=0.7</code>:</strong> Randomly changes saturation by up to 70%. This is a large range and is particularly important for archery, it simulates everything from vivid outdoor colors to washed-out overcast lighting. The target rings can look very different under different lighting conditions.</p>
+<p><strong><code>hsv_v=0.4</code>:</strong> Randomly changes brightness by up to 40%. Handles the difference between indoor dim ranges and bright outdoor conditions.</p>
+<p><strong><code>translate=0.1</code>:</strong> Randomly shifts the image up/down/left/right by up to 10% of image size. Teaches the model that objects can appear anywhere in frame, not just centered.</p>
+<p><strong><code>scale=0.5</code>:</strong> Randomly zooms in or out by up to 50%. This is critical for archery: archers photograph from different distances. An arrow tip that’s 8px wide from 3 meters becomes 4px wide from 6 meters. This augmentation teaches the model to handle both scales correctly.</p>
+<p><strong><code>fliplr=0.5</code>:</strong> Randomly flips the image horizontally with 50% probability. A target looks identical mirrored. An arrow shaft pointing left is the same as one pointing right. This doubles your effective dataset at zero cost.</p>
+<p><strong><code>mosaic=1.0</code>:</strong> Takes 4 training images and combines them into a 2×2 grid, with all labels from all 4 included. This forces the model to detect objects at smaller scales and in unusual contexts. It’s one of YOLO’s most effective augmentations, essentially quadrupling training variety per step.</p>
+<p><strong><code>degrees=0.0</code>:</strong> Rotation augmentation is explicitly set to zero because the bounding box labels aren’t drawn to handle rotation. If training images were rotated, the axis-aligned bounding boxes would stay horizontal while the actual objects inside them were tilted, giving the model incorrect supervision signals.</p>
+<h3 id="regularization"><strong>Regularization</strong></h3>
+<p><strong><code>dropout=0.1</code>:</strong> During training, randomly sets 10% of neurons to zero on each forward pass. This prevents any single neuron from becoming too important and forces the network to learn redundant representations. The result is better generalization to images it hasn’t seen before.</p>
+<h3 id="behavior-settings"><strong>Behavior Settings</strong></h3>
+<p><strong><code>patience=20</code>:</strong> If mAP50 on the validation set doesn’t improve for 20 consecutive epochs, training stops automatically. This is early stopping — it prevents wasting compute past the point of improvement and prevents overfitting. The actual training may stop at epoch 45 or 60 rather than 100.</p>
+<p><strong><code>save=True</code> / <code>save_period=10</code>:</strong> <code>save=True</code> saves <code>best.pt</code> (best validation performance) and <code>last.pt</code> (final epoch). <code>save_period=10</code> additionally saves a checkpoint every 10 epochs — useful if the training environment disconnects mid-run.</p>
+<p><strong><code>plots=True</code>:</strong> Automatically generates result charts after training: loss curves, mAP curves, confusion matrix, and sample predictions. These are saved to the output folder and are the primary way to evaluate whether training worked correctly.</p>
+<h3 id="output-settings"><strong>Output Settings</strong></h3>
+<p><strong><code>project='archery_yolo26'</code> / <code>name='v1'</code> / <code>exist_ok=True</code>:</strong> Results save to <code>archery_yolo26/v1/</code>. Using <code>name='v1'</code> on the next run sends results to <code>archery_yolo26/v1/</code> without overwriting. <code>exist_ok=True</code> means if v1 already exists it overwrites rather than erroring.</p>
+<h3 id="hardware-settings"><strong>Hardware Settings</strong></h3>
+<p><strong><code>device=0</code>:</strong> Use GPU 0 (the first GPU available). Without this it falls back to CPU.</p>
+<p><strong><code>workers=2</code>:</strong> Number of CPU threads loading images in parallel while the GPU trains.</p>
+<p><strong><code>cache=True</code>:</strong> Loads all training images into RAM at the start. After that, each epoch reads from RAM instead of disk, making training significantly faster. At ~500 images this fits comfortably in RAM.</p>
+<hr>
+<h2 id="performance-metrics--what-they-mean-in-this-context"><strong>Performance Metrics — What They Mean in This Context</strong></h2>
+<p>Before looking at the numbers, it’s worth being precise about what each metric captures in this specific task.</p>
+<p><strong>Precision (Quality):</strong> When the model says “I found an arrow tip,” how often is it actually an arrow tip? A bounding box drawn around a hole in the target or a ring line and classified as <code>arrow_tip</code> lowers Precision.</p>
+<p><strong>Recall (Quantity):</strong> Of all the arrow tips actually on the target, how many did the model find? If there are 6 arrows on the target and the model only detects 4, Recall is 0.66 (66%).</p>
+<p><strong>mAP50 (Overall accuracy):</strong> Mean Average Precision at 0.5 IoU. A detection counts as correct if the predicted bounding box overlaps at least 50% with the ground truth box. This is the primary benchmark metric.</p>
+<p><strong>mAP50-95 (Localization strictness):</strong> The same metric averaged across IoU thresholds from 50% to 95%. This is much stricter and more meaningful for precise localization tasks, an arrow tip bounding box that’s roughly in the right region passes mAP50 but fails mAP50-95 if it’s not pixel-tight. For scoring arrows near ring boundaries, this number matters more than mAP50.</p>
+<hr>
+<h2 id="performance-results--full-analysis"><strong>Performance Results &#x26; Full Analysis</strong></h2>
+<h3 id="model-summary-and-initial-validation"><strong>Model Summary and Initial Validation</strong></h3>
+<p><strong>YOLO26s:</strong></p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>YOLO26s summary (fused): 122 layers, 9,466,728 parameters, 0 gradients, 20.5 GFLOPs</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>Class           Images  Instances   Box(P      R      mAP50   mAP50-95)</span></span>
+<span class="line"><span>all                 50        624   0.908   0.870   0.912      0.698</span></span>
+<span class="line"><span>arrow_shaft         50        267   0.893   0.816   0.914      0.795</span></span>
+<span class="line"><span>arrow_tip           50        257   0.829   0.751   0.772      0.278</span></span>
+<span class="line"><span>target_center       50         50   0.979   0.913   0.974      0.740</span></span>
+<span class="line"><span>target_face         50         50   0.930   1.000   0.988      0.979</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>Speed: 0.3ms preprocess, 5.3ms inference, 0.0ms loss, 1.0ms postprocess per image</span></span></code></pre>
+<p><strong>YOLOv12s:</strong></p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>YOLOv12s summary (fused): 159 layers, 9,232,428 parameters, 0 gradients, 21.2 GFLOPs</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>Class           Images  Instances   Box(P      R      mAP50   mAP50-95)</span></span>
+<span class="line"><span>all                 50        624   0.911   0.890   0.924      0.705</span></span>
+<span class="line"><span>arrow_shaft         50        267   0.934   0.899   0.949      0.818</span></span>
+<span class="line"><span>arrow_tip           50        257   0.859   0.760   0.783      0.277</span></span>
+<span class="line"><span>target_center       50         50   0.947   0.900   0.972      0.732</span></span>
+<span class="line"><span>target_face         50         50   0.905   1.000   0.993      0.993</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>Speed: 0.2ms preprocess, 8.7ms inference, 0.0ms loss, 4.7ms postprocess per image</span></span></code></pre>
+<h3 id="validation-set-performance"><strong>Validation Set Performance</strong></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Metric</th><th>YOLO26s</th><th>YOLOv12s</th></tr></thead><tbody><tr><td>Overall mAP50</td><td>0.913</td><td>0.924</td></tr><tr><td>Overall mAP50-95</td><td>0.698</td><td>0.704</td></tr><tr><td>Precision</td><td>0.910</td><td>0.911</td></tr><tr><td>Recall</td><td>0.871</td><td>0.890</td></tr></tbody></table>
+<p><strong>Per-Class mAP50:</strong></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Class</th><th>mAP50 (YOLO26s)</th><th>mAP50-95 (YOLO26s)</th><th>mAP50 (YOLOv12s)</th><th>mAP50-95 (YOLOv12s)</th></tr></thead><tbody><tr><td>arrow_shaft</td><td>0.914</td><td>0.795</td><td>0.948</td><td>0.818</td></tr><tr><td>arrow_tip</td><td>0.776</td><td>0.278</td><td>0.785</td><td>0.277</td></tr><tr><td>target_center</td><td>0.975</td><td>0.742</td><td>0.972</td><td>0.732</td></tr><tr><td>target_face</td><td>0.989</td><td>0.980</td><td>0.993</td><td>0.993</td></tr></tbody></table>
+<h3 id="test-set-performance"><strong>Test Set Performance</strong></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Metric</th><th>YOLO26s</th><th>YOLOv12s</th></tr></thead><tbody><tr><td>Overall mAP50</td><td>0.875</td><td>0.872</td></tr><tr><td>Overall mAP50-95</td><td>0.653</td><td>0.659</td></tr><tr><td>Precision</td><td>0.878</td><td>0.879</td></tr><tr><td>Recall</td><td>0.844</td><td>0.862</td></tr></tbody></table>
+<p><strong>Per-Class mAP50:</strong></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Class</th><th>mAP50 (YOLO26s)</th><th>mAP50-95 (YOLO26s)</th><th>mAP50 (YOLOv12s)</th><th>mAP50-95 (YOLOv12s)</th></tr></thead><tbody><tr><td>arrow_shaft</td><td>0.909</td><td>0.748</td><td>0.901</td><td>0.704</td></tr><tr><td>arrow_tip</td><td>0.673</td><td>0.195</td><td>0.608</td><td>0.186</td></tr><tr><td>target_center</td><td>0.951</td><td>0.717</td><td>0.985</td><td>0.769</td></tr><tr><td>target_face</td><td>0.969</td><td>0.954</td><td>0.992</td><td>0.977</td></tr></tbody></table>
+<h3 id="confusion-matrices"><strong>Confusion Matrices</strong></h3>
+<h4 id="yolo26s"><strong>YOLO26s</strong></h4>
+<figure>
+  <img src="/images/score_detection/confusion_matrix.png" alt="Confusion Matrix YOLO26s">
+  <figcaption>Figure 2. Confusion Matrix YOLO26s.</figcaption>
+</figure>
+<h4 id="yolov12s"><strong>YOLOv12s</strong></h4>
+<figure>
+  <img src="/images/score_detection/confusion_matrix12.png" alt="Confusion Matrix YOLOv12s">
+  <figcaption>Figure 3. Confusion Matrix YOLOv12s.</figcaption>
+</figure>
+<h3 id="training-curves"><strong>Training Curves</strong></h3>
+<h4 id="yolo26s-1"><strong>YOLO26s</strong></h4>
+<figure>
+  <img src="/images/score_detection/training_curves.png" alt="Training Curves YOLO26s">
+  <figcaption>Figure 4. Training Curves YOLO26s.</figcaption>
+</figure>
+<h4 id="yolov12s-1"><strong>YOLOv12s</strong></h4>
+<figure>
+  <img src="/images/score_detection/training_curves12.png" alt="Training Curves YOLOv12s">
+  <figcaption>Figure 5. Training Curves YOLOv12s.</figcaption>
+</figure>
+<h3 id="comparative-analysis"><strong>Comparative Analysis</strong></h3>
+<p><strong>Validation vs. Test Gap:</strong></p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>YOLO26s:</span></span>
+<span class="line"><span>  Val  mAP50: 0.913</span></span>
+<span class="line"><span>  Test mAP50: 0.875</span></span>
+<span class="line"><span>  Gap:        0.038</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>YOLOv12s:</span></span>
+<span class="line"><span>  Val  mAP50: 0.924</span></span>
+<span class="line"><span>  Test mAP50: 0.872</span></span>
+<span class="line"><span>  Gap:        0.053</span></span></code></pre>
+<p>YOLOv12s scores higher on validation but has a larger validation-to-test gap (0.053 vs 0.038), indicating more overfitting. On the held-out test set, the two models are essentially tied on overall mAP50.</p>
+<p><strong>Critical Class: Arrow Tip Detection</strong></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Metric</th><th>YOLO26s</th><th>YOLOv12s</th></tr></thead><tbody><tr><td>Arrow Tip mAP50 (test)</td><td><strong>0.673</strong></td><td>0.608</td></tr><tr><td>Arrow Tip mAP50-95 (test)</td><td><strong>0.195</strong></td><td>0.186</td></tr><tr><td>Localization gap</td><td>0.478</td><td>0.422</td></tr></tbody></table>
+<p>This is the deciding metric. Arrow tips are the only class that directly determines scores. YOLO26s outperforms YOLOv12s on the test set for the most critical class. Missing a tip means a missed score, there is no worse failure mode for this application.</p>
+<p><strong>Inference Speed:</strong></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Model</th><th>Total inference</th></tr></thead><tbody><tr><td>YOLO26s</td><td>6.3ms</td></tr><tr><td>YOLOv12s</td><td>13.4ms</td></tr></tbody></table>
+<p>YOLO26s is approximately 2× faster end-to-end.</p>
+<p><strong>Model Selection:</strong> YOLO26s was selected for production based on superior arrow tip detection performance and significantly lower latency. YOLOv12s’s better <code>target_center</code> localization (0.985 vs 0.951 mAP50) was noted but outweighed by the tip detection advantage.</p>
+<h3 id="failure-case-analysis"><strong>Failure Case Analysis</strong></h3>
+<p><strong>YOLO26s — 9/25 test images with missed arrow tips:</strong></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Image</th><th>GT Arrows</th><th>Detected</th><th>Missed</th></tr></thead><tbody><tr><td>135_jpeg_jpg.rf.25c9c1679a…</td><td>5</td><td>1</td><td>4</td></tr><tr><td>IMG_3836_result_jpg.rf.e8c2…</td><td>6</td><td>4</td><td>2</td></tr><tr><td>20250619_162850_jpg.rf.014b…</td><td>6</td><td>4</td><td>2</td></tr><tr><td>112_countarrow_poly_png_jpg…</td><td>7</td><td>5</td><td>2</td></tr><tr><td>14_countarrow_poly_png_jpg…</td><td>2</td><td>1</td><td>1</td></tr></tbody></table>
+<figure>
+  <img src="/images/score_detection/failed.png" alt="Failed Cases YOLO26s">
+  <figcaption>Figure 6. Failed Cases YOLO26s.</figcaption>
+</figure>
+<p><strong>YOLOv12s — 7/25 test images with missed arrow tips:</strong></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Image</th><th>GT Arrows</th><th>Detected</th><th>Missed</th></tr></thead><tbody><tr><td>135_jpeg_jpg.rf.25c9c1679a…</td><td>5</td><td>2</td><td>3</td></tr><tr><td>IMG_3764_result_jpg.rf.cc8a…</td><td>6</td><td>4</td><td>2</td></tr><tr><td>20250619_162850_jpg.rf.014b…</td><td>6</td><td>4</td><td>2</td></tr><tr><td>20250927_101828_jpg.rf.a615…</td><td>6</td><td>5</td><td>1</td></tr><tr><td>20250913_104221_jpg.rf.851a…</td><td>6</td><td>5</td><td>1</td></tr></tbody></table>
+<figure>
+  <img src="/images/score_detection/failed12.png" alt="Failed Cases YOLOv12s">
+  <figcaption>Figure 7. Failed Cases YOLOv12s.</figcaption>
+</figure>
+<p>The primary failure mode is identical for both models: <strong>dense clustering</strong> with 5+ arrows. Every worst-case failure involves multiple arrows packed together. Images with fewer than 4 arrows showed near-perfect detection across both models.</p>
+<h3 id="key-insights"><strong>Key Insights</strong></h3>
+<p><strong>1. Generalization is strong.</strong> The 3.8% validation-to-test gap for YOLO26s indicates the model is learning genuine features rather than memorizing training examples.</p>
+<p><strong>2. Target detection is reliable.</strong> Both <code>target_face</code> and <code>target_center</code> exceed 95% mAP50 on the unseen test set. The scoring geometry anchor points are found consistently regardless of shooting distance, lighting, or camera angle.</p>
+<p><strong>3. Arrow tip localization is the primary limitation.</strong> The localization gap is sharp: 67.3% mAP50 but only 19.5% mAP50-95 — a 47.8 point drop. The model finds approximate tip regions but struggles with pixel-precise localization. For arrows near ring boundaries, this directly translates to incorrect scores.</p>
+<p><strong>4. Clustering degrades performance.</strong> The primary failure mode is clear and actionable: 5+ arrows clustered. This is a data problem as much as a model problem, the training set needs more examples of dense cluster scenarios.</p>
+<p><strong>5. Inference is fast enough.</strong> At 6.3ms per image on GPU, the model is well within real-time requirements for a mobile app where images are processed once per end.</p>
+<hr>
+<h2 id="scoring-logic--integration-pipeline"><strong>Scoring Logic &#x26; Integration Pipeline</strong></h2>
+<p>Detection is only half the problem. Once YOLO26s returns bounding box coordinates, they are processed by a <strong>custom geometric engine</strong> that converts pixel positions into scores.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>Image → Perspective Correction → YOLO Detection → Geometry Resolution → Score Calculation → Visualization</span></span></code></pre>
+<h3 id="project-structure"><strong>Project Structure</strong></h3>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>archery/</span></span>
+<span class="line"><span>├── models/</span></span>
+<span class="line"><span>│   └── best.pt</span></span>
+<span class="line"><span>├── src/</span></span>
+<span class="line"><span>│   ├── visualize_inference.py   # drawing results for single inference</span></span>
+<span class="line"><span>│   ├── detection.py             # YOLO inference</span></span>
+<span class="line"><span>│   ├── perspective.py           # HSV + ellipse + affine warp</span></span>
+<span class="line"><span>│   ├── geometry.py              # distance calc + score lookup</span></span>
+<span class="line"><span>│   └── visualize.py             # drawing results</span></span>
+<span class="line"><span>├── main.py                      # entry point</span></span>
+<span class="line"><span>├── labeling.py                  # auto-label new images using model</span></span>
+<span class="line"><span>└── config.py                    # all constants and paths</span></span></code></pre>
+<p>The pipeline operates entirely in <strong>pixel coordinates</strong>. Every module produces and consumes pixel-space values. This eliminates the normalization mismatch that is common in systems that mix YOLO’s 0–1 normalized outputs with pixel-space geometry.</p>
+<hr>
+<h3 id="stage-1--perspective-correction-perspectivepy"><strong>Stage 1 — Perspective Correction</strong> (<code>perspective.py</code>)</h3>
+<p>Photographs of archery targets are rarely taken head-on. Camera tilt causes the circular target to appear as an <strong>ellipse</strong> in the image. If scoring directly on the tilted image, arrows near the edges receive systematically wrong scores because distances are compressed along the tilt axis. Perspective correction warps the image so the target becomes circular again, restoring true radial distances.</p>
+<h4 id="step-11--red-zone-isolation-via-hsv-color-space"><strong>Step 1.1 — Red Zone Isolation via HSV Color Space</strong></h4>
+<p>The red scoring zone (rings 7 and 8) provides a reliable structural marker because red is the most chromatically distinct color on a WA target face. The image is converted from BGR to <strong>HSV</strong> (Hue, Saturation, Value) because red pixels cluster tightly in hue space, making them easier to isolate than in RGB where red is spread across all three channels.</p>
+<p>Red wraps around the hue cylinder in HSV (0° and 360° are both red), so we use <strong>two separate hue ranges</strong> to capture it completely:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># Range 1: hue 0–10° (orange-red end)</span></span>
+<span class="line"><span style="color:#79B8FF">RED_HSV_LOWER_1</span><span style="color:#F97583"> =</span><span style="color:#E1E4E8"> (</span><span style="color:#79B8FF">0</span><span style="color:#E1E4E8">,   </span><span style="color:#79B8FF">80</span><span style="color:#E1E4E8">, </span><span style="color:#79B8FF">80</span><span style="color:#E1E4E8">)</span></span>
+<span class="line"><span style="color:#79B8FF">RED_HSV_UPPER_1</span><span style="color:#F97583"> =</span><span style="color:#E1E4E8"> (</span><span style="color:#79B8FF">10</span><span style="color:#E1E4E8">,  </span><span style="color:#79B8FF">255</span><span style="color:#E1E4E8">, </span><span style="color:#79B8FF">255</span><span style="color:#E1E4E8">)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D"># Range 2: hue 170–180° (magenta-red end)</span></span>
+<span class="line"><span style="color:#79B8FF">RED_HSV_LOWER_2</span><span style="color:#F97583"> =</span><span style="color:#E1E4E8"> (</span><span style="color:#79B8FF">170</span><span style="color:#E1E4E8">, </span><span style="color:#79B8FF">80</span><span style="color:#E1E4E8">, </span><span style="color:#79B8FF">80</span><span style="color:#E1E4E8">)</span></span>
+<span class="line"><span style="color:#79B8FF">RED_HSV_UPPER_2</span><span style="color:#F97583"> =</span><span style="color:#E1E4E8"> (</span><span style="color:#79B8FF">180</span><span style="color:#E1E4E8">, </span><span style="color:#79B8FF">255</span><span style="color:#E1E4E8">, </span><span style="color:#79B8FF">255</span><span style="color:#E1E4E8">)</span></span></code></pre>
+<p>The saturation and value thresholds (<span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>S</mi><mo>≥</mo><mn>80</mn></mrow><annotation encoding="application/x-tex">S \geq 80</annotation></semantics></math></span>, <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>V</mi><mo>≥</mo><mn>80</mn></mrow><annotation encoding="application/x-tex">V \geq 80</annotation></semantics></math></span>) reject whitish and dark pixels that might have a red-ish hue due to noise. The two binary masks are combined with <code>cv2.bitwise_or</code> to produce a single red mask as shown in Figure 8 plot 2.</p>
+<h4 id="step-12--morphological-cleanup"><strong>Step 1.2 — Morphological Cleanup</strong></h4>
+<p>The raw red mask contains noise (small red-ish artifacts outside the target) and gaps (where arrows, text, or shadows occlude the red ring). Then apply two morphological operations using a <strong>7×7 kernel</strong>:</p>
+<ol>
+<li><strong>MORPH_CLOSE</strong> (dilation → erosion): Fills small holes <em>inside</em> the red region. Arrow shafts crossing the red zone create thin black lines in the mask; closing seals them as shown in Figure 8 plot 3a.</li>
+<li><strong>MORPH_OPEN</strong> (erosion → dilation): Removes small noise <em>outside</em> the red region. Stray red pixels from fletchings, clothing, or background objects are eliminated as shown in Figure 8 plot 3b.</li>
+</ol>
+<p>The order matters: closing first preserves the red zone’s shape before opening trims exterior noise.</p>
+<h4 id="step-13--contour-extraction-and-ellipse-fitting"><strong>Step 1.3 — Contour Extraction and Ellipse Fitting</strong></h4>
+<p>The external contours are then extracted from the cleaned mask using <code>cv2.findContours</code> and select the <strong>largest contour by area</strong>, this is the red scoring zone. OpenCV’s <code>cv2.fitEllipse</code> fits a rotated ellipse to this contour using least-squares optimization, returning three parameters:</p>
+<ul>
+<li><strong>center</strong> <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><msub><mi>c</mi><mi>x</mi></msub><mo separator="true">,</mo><msub><mi>c</mi><mi>y</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(c_x, c_y)</annotation></semantics></math></span>: the ellipse center in pixel coordinates</li>
+<li><strong>axes</strong> <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mi>w</mi><mo separator="true">,</mo><mi>h</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(w, h)</annotation></semantics></math></span>: the full width and height of the ellipse</li>
+<li><strong>angle</strong> <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>θ</mi></mrow><annotation encoding="application/x-tex">\theta</annotation></semantics></math></span>: rotation angle in degrees</li>
+</ul>
+<p>The <strong>aspect ratio</strong> (semi-minor / semi-major) tells us how much perspective distortion exists. A ratio of 1.0 means the target is already perfectly circular; lower values indicate more tilt.</p>
+<h4 id="step-14--affine-warp-ellipse--circle"><strong>Step 1.4 — Affine Warp (Ellipse → Circle)</strong></h4>
+<p>To correct the perspective, I compute an affine transformation that maps the detected ellipse onto a circle. The output circle has a radius equal to the ellipse’s <strong>semi-major axis</strong> (the larger half-axis), preserving the maximum resolution.</p>
+<p>The transformation requires three point correspondences. I choose the points that represent the true vertical and horizontal extrema of the rotated ellipse: the topmost, rightmost, and bottommost points.</p>
+<p>The ellipse boundary in image coordinates uses a parametric form with rotation angle <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ϕ</mi></mrow><annotation encoding="application/x-tex">\phi</annotation></semantics></math></span>:</p>
+<p><span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo><mo>=</mo><msub><mi>c</mi><mi>x</mi></msub><mo>+</mo><mi>a</mi><mi>cos</mi><mo>⁡</mo><mi>t</mi><mi>cos</mi><mo>⁡</mo><mi>ϕ</mi><mo>−</mo><mi>b</mi><mi>sin</mi><mo>⁡</mo><mi>t</mi><mi>sin</mi><mo>⁡</mo><mi>ϕ</mi></mrow><annotation encoding="application/x-tex">x(t) = c_x + a\cos t \cos\phi - b\sin t \sin\phi</annotation></semantics></math></span>
+<span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo><mo>=</mo><msub><mi>c</mi><mi>y</mi></msub><mo>+</mo><mi>a</mi><mi>cos</mi><mo>⁡</mo><mi>t</mi><mi>sin</mi><mo>⁡</mo><mi>ϕ</mi><mo>+</mo><mi>b</mi><mi>sin</mi><mo>⁡</mo><mi>t</mi><mi>cos</mi><mo>⁡</mo><mi>ϕ</mi></mrow><annotation encoding="application/x-tex">y(t) = c_y + a\cos t \sin\phi + b\sin t \cos\phi</annotation></semantics></math></span></p>
+<p>where <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>a</mi></mrow><annotation encoding="application/x-tex">a</annotation></semantics></math></span> and <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>b</mi></mrow><annotation encoding="application/x-tex">b</annotation></semantics></math></span> are the semi-major and semi-minor axes, respectively.</p>
+<p>To find the top/bottom points, I set the vertical derivative to zero:</p>
+<p><span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mfrac><mrow><mi>d</mi><mi>y</mi></mrow><mrow><mi>d</mi><mi>t</mi></mrow></mfrac><mo>=</mo><mo>−</mo><mi>a</mi><mi>sin</mi><mo>⁡</mo><mi>t</mi><mtext> </mtext><mi>sin</mi><mo>⁡</mo><mi>ϕ</mi><mo>+</mo><mi>b</mi><mi>cos</mi><mo>⁡</mo><mi>t</mi><mtext> </mtext><mi>cos</mi><mo>⁡</mo><mi>ϕ</mi><mo>=</mo><mn>0</mn><mspace width="1em"></mspace><mo>⇒</mo><mspace width="1em"></mspace><mi>tan</mi><mo>⁡</mo><msub><mi>t</mi><mi>y</mi></msub><mo>=</mo><mfrac><mrow><mi>b</mi><mi>cos</mi><mo>⁡</mo><mi>ϕ</mi></mrow><mrow><mi>a</mi><mi>sin</mi><mo>⁡</mo><mi>ϕ</mi></mrow></mfrac></mrow><annotation encoding="application/x-tex">\frac{dy}{dt} = -a\sin t\,\sin\phi + b\cos t\,\cos\phi = 0 \quad \Rightarrow \quad \tan t_y = \frac{b\cos\phi}{a\sin\phi}</annotation></semantics></math></span></p>
+<p>To find the left/right points, I set the horizontal derivative to zero:</p>
+<p><span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mfrac><mrow><mi>d</mi><mi>x</mi></mrow><mrow><mi>d</mi><mi>t</mi></mrow></mfrac><mo>=</mo><mo>−</mo><mi>a</mi><mi>sin</mi><mo>⁡</mo><mi>t</mi><mtext> </mtext><mi>cos</mi><mo>⁡</mo><mi>ϕ</mi><mo>−</mo><mi>b</mi><mi>cos</mi><mo>⁡</mo><mi>t</mi><mtext> </mtext><mi>sin</mi><mo>⁡</mo><mi>ϕ</mi><mo>=</mo><mn>0</mn><mspace width="1em"></mspace><mo>⇒</mo><mspace width="1em"></mspace><mi>tan</mi><mo>⁡</mo><msub><mi>t</mi><mi>x</mi></msub><mo>=</mo><mo>−</mo><mfrac><mrow><mi>b</mi><mi>sin</mi><mo>⁡</mo><mi>ϕ</mi></mrow><mrow><mi>a</mi><mi>cos</mi><mo>⁡</mo><mi>ϕ</mi></mrow></mfrac></mrow><annotation encoding="application/x-tex">\frac{dx}{dt} = -a\sin t\,\cos\phi - b\cos t\,\sin\phi = 0 \quad \Rightarrow \quad \tan t_x = -\frac{b\sin\phi}{a\cos\phi}</annotation></semantics></math></span></p>
+<p>In code these are computed robustly with <code>arctan2</code>:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#E1E4E8">t_y </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> np.arctan2(b </span><span style="color:#F97583">*</span><span style="color:#E1E4E8"> np.cos(phi), a </span><span style="color:#F97583">*</span><span style="color:#E1E4E8"> np.sin(phi))</span></span>
+<span class="line"><span style="color:#E1E4E8">t_x </span><span style="color:#F97583">=</span><span style="color:#E1E4E8"> np.arctan2(</span><span style="color:#F97583">-</span><span style="color:#E1E4E8">b </span><span style="color:#F97583">*</span><span style="color:#E1E4E8"> np.sin(phi), a </span><span style="color:#F97583">*</span><span style="color:#E1E4E8"> np.cos(phi))</span></span></code></pre>
+<p>Each angle produces two extrema on the ellipse separated by <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>π</mi></mrow><annotation encoding="application/x-tex">\pi</annotation></semantics></math></span> radians, so I evaluate both <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>t</mi></mrow><annotation encoding="application/x-tex">t</annotation></semantics></math></span> and <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>t</mi><mo>+</mo><mi>π</mi></mrow><annotation encoding="application/x-tex">t + \pi</annotation></semantics></math></span> and choose:</p>
+<ul>
+<li><code>top</code> as the point with minimum <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi></mrow><annotation encoding="application/x-tex">y</annotation></semantics></math></span></li>
+<li><code>right</code> as the point with maximum <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span></li>
+<li><code>bottom</code> as the point with maximum <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi></mrow><annotation encoding="application/x-tex">y</annotation></semantics></math></span></li>
+</ul>
+<p>These are then paired with the corresponding circle points:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Point</th><th>Source (on ellipse)</th><th>Destination (on circle)</th></tr></thead><tbody><tr><td>Top</td><td>Rotated ellipse top extremum</td><td><span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><msub><mi>c</mi><mi>x</mi></msub><mo separator="true">,</mo><msub><mi>c</mi><mi>y</mi></msub><mo>−</mo><mi>r</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(c_x, c_y - r)</annotation></semantics></math></span></td></tr><tr><td>Right</td><td>Rotated ellipse right extremum</td><td><span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><msub><mi>c</mi><mi>x</mi></msub><mo>+</mo><mi>r</mi><mo separator="true">,</mo><msub><mi>c</mi><mi>y</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(c_x + r, c_y)</annotation></semantics></math></span></td></tr><tr><td>Bottom</td><td>Rotated ellipse bottom extremum</td><td><span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><msub><mi>c</mi><mi>x</mi></msub><mo separator="true">,</mo><msub><mi>c</mi><mi>y</mi></msub><mo>+</mo><mi>r</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(c_x, c_y + r)</annotation></semantics></math></span></td></tr></tbody></table>
+<p>The 2×3 affine matrix <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>M</mi></mrow><annotation encoding="application/x-tex">M</annotation></semantics></math></span> is computed via <code>cv2.getAffineTransform(src, dst)</code> and applied to the entire image using <code>cv2.warpAffine</code>. After warping, the target face appears circular and all radial distances are geometrically correct.</p>
+<h4 id="step-15--full-target-radius-estimation"><strong>Step 1.5 — Full Target Radius Estimation</strong></h4>
+<p>The detected ellipse corresponds only to the <strong>red zone</strong>, not the full target. On a standard WA 122cm outdoor target, the red zone (rings 7–8) extends to 40% of the total target radius. A configurable ratio (<code>RED_ZONE_RATIO = 0.4</code>) is used to scale up:</p>
+<p><span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>R</mi><mtext>full</mtext></msub><mo>=</mo><mfrac><msub><mi>r</mi><mtext>red zone</mtext></msub><mtext>RED_ZONE_RATIO</mtext></mfrac></mrow><annotation encoding="application/x-tex">R_{\text{full}} = \frac{r_{\text{red zone}}}{\text{RED\_ZONE\_RATIO}}</annotation></semantics></math></span></p>
+<p>The center coordinates are also updated to account for the affine transformation by transforming the original center point through the same matrix <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>M</mi></mrow><annotation encoding="application/x-tex">M</annotation></semantics></math></span>.</p>
+<p>The function returns:</p>
+<ul>
+<li>The <strong>warped image</strong> (target is now circular)</li>
+<li>The <strong>affine matrix</strong> <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>M</mi></mrow><annotation encoding="application/x-tex">M</annotation></semantics></math></span></li>
+<li>A <strong>target dict</strong> <code>{cx, cy, radius}</code> in pixels, the estimated center and full target radius in the corrected image</li>
+</ul>
+<figure>
+  <img src="/images/score_detection/perspective_steps1.png" alt="Perspective Correction Steps">
+  <figcaption>Figure 8. Perspective Correction Steps.</figcaption>
+</figure>
+<h4 id="observations-and-other-approaches"><strong>Observations and Other Approaches</strong></h4>
+<p>This stage was one of the most challenging parts of the project because it directly affects the accuracy of all later stages. Several approaches were tested beyond the affine warp described above.</p>
+<p><strong>Issues encountered:</strong></p>
+<ul>
+<li>After warping, the ellipse center could be significantly offset from the YOLO-detected <code>target_center</code>, which proved more reliable. For that reason, the pipeline prioritizes the YOLO target center over the ellipse center.</li>
+<li>Some images produced perfect results while others missed arrows entirely. Further debugging showed that the full target radius estimated from the red-zone ellipse was not accurate enough. A small radius error propagated outward through each ring, causing the warped outer rings to deviate significantly from their true positions.</li>
+</ul>
+<figure>
+  <img src="/images/score_detection/output_debug1.png" alt="Output Debug — Major Axis">
+  <figcaption>Figure 9. Output Debug — Major Axis.</figcaption>
+</figure>
+<p><strong>Approaches tested to fix the radius issue:</strong></p>
+<ul>
+<li><strong>Major axis as radius:</strong> The initial approach, produces the described propagation error.</li>
+<li><strong>Minor axis as radius:</strong> The output still suffered from the same distortion; only the warped scale changed.</li>
+</ul>
+<figure>
+  <img src="/images/score_detection/output_debug_minor.png" alt="Output Debug — Minor Axis">
+  <figcaption>Figure 10. Output Debug — Minor Axis.</figcaption>
+</figure>
+<ul>
+<li><strong>Average of both axes:</strong> Same class of error, the propagation remained.</li>
+</ul>
+<figure>
+  <img src="/images/score_detection/output_debug_avg.png" alt="Output Debug — Average Axes">
+  <figcaption>Figure 11. Output Debug — Average Axes.</figcaption>
+</figure>
+<ul>
+<li><strong>Full homography (4 points):</strong> Replaced the affine transform with <code>cv2.getPerspectiveTransform(src_pts, dst_pts)</code>, adding the leftmost circle point as a fourth correspondence. The same propagated error remained.</li>
+</ul>
+<figure>
+  <img src="/images/score_detection/output_debug2.png" alt="Output Debug — Homography">
+  <figcaption>Figure 12. Output Debug — Homography.</figcaption>
+</figure>
+<ul>
+<li><strong>Point selection variation:</strong> I suspected the three or four point correspondences might be too geometrically similar when aligned with the major axis. However, changing the radius assumption to the axis average didn’t improve the result, so that hypothesis appeared unlikely.</li>
+</ul>
+<p>This remains an open problem. The pipeline currently compensates by using YOLO’s <code>target_center</code> as the primary center reference and the <code>target_face</code> bounding box as a radius fallback, but robust perspective correction is still needed for the outer rings.</p>
+<hr>
+<h3 id="stage-2--yolo-detectiondetectionpy"><strong>Stage 2 — YOLO Detection</strong>(<code>detection.py</code>)</h3>
+<p>The YOLO26s model runs on the <strong>perspective-corrected image</strong> and detects four object classes:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Class</th><th>Purpose</th><th>Output Used</th></tr></thead><tbody><tr><td><code>arrow_tip</code></td><td>Point of impact</td><td>Center <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><msub><mi>c</mi><mi>x</mi></msub><mo separator="true">,</mo><msub><mi>c</mi><mi>y</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(c_x, c_y)</annotation></semantics></math></span> for scoring</td></tr><tr><td><code>arrow_shaft</code></td><td>Arrow body</td><td>Used to refine tip position via shaft direction</td></tr><tr><td><code>target_center</code></td><td>The X-ring / 10-ring bullseye</td><td>Provides precise center reference</td></tr><tr><td><code>target_face</code></td><td>Full target boundary</td><td>Fallback for radius estimation</td></tr></tbody></table>
+<p>All coordinates are returned in <strong>pixel space</strong> using <code>box.xywh</code> (not normalized <code>box.xywhn</code>), so they can be directly compared with the pixel-space geometry from Stage 1.</p>
+<p>The model runs with <code>conf=0.25</code>, <code>iou=0.45</code>, and <code>max_det=20</code>. For <code>target_face</code> and <code>target_center</code>, only the highest-confidence detection is kept. All <code>arrow_tip</code> and <code>arrow_shaft</code> detections are collected into lists.</p>
+<figure>
+  <img src="/images/score_detection/output_yolo_detection.png" alt="YOLO Detection Output">
+  <figcaption>Figure 13. YOLO Detection Output.</figcaption>
+</figure>
+<hr>
+<h3 id="stage-3--geometry-resolution-geometrypy"><strong>Stage 3 — Geometry Resolution</strong> (<code>geometry.py</code>)</h3>
+<p>The geometry resolver determines the <strong>best center</strong> and <strong>best radius</strong> for scoring by fusing information from the two independent sources: perspective correction (HSV-based) and YOLO detection.</p>
+<p><strong>Center Selection Priority:</strong></p>
+<ol>
+<li><strong>YOLO <code>target_center</code></strong> (highest priority): The model detects a tight bounding box around the X-ring; its center point is the most spatially precise locator available.</li>
+<li><strong>Ellipse center</strong> (from <code>perspective.py</code>): The centroid of the fitted red zone ellipse, transformed through the affine warp matrix.</li>
+<li><strong>YOLO <code>target_face</code> center</strong> (fallback): The center of the full target bounding box; least precise but still functional.</li>
+</ol>
+<p><strong>Radius Selection Priority:</strong></p>
+<ol>
+<li><strong>Ellipse-based radius</strong> (highest priority): Already scaled by <code>RED_ZONE_RATIO</code> to represent the full target radius.</li>
+<li><strong>YOLO <code>target_face</code> width / 2</strong> (fallback): Uses the face bounding box as an approximation of the target diameter.</li>
+</ol>
+<p><strong>Cross-Validation:</strong> When both sources provide a center, the resolver computes the Euclidean distance between them. If the mismatch exceeds <strong>30 pixels</strong>, a warning is logged, this can indicate that the perspective correction drifted or that the YOLO detection is inaccurate.</p>
+<hr>
+<h3 id="stage-4--score-calculation-geometrypy"><strong>Stage 4 — Score Calculation</strong> (<code>geometry.py</code>)</h3>
+<h4 id="arrow-tip-refinement"><strong>Arrow Tip Refinement</strong></h4>
+<p>YOLO’s bounding boxes have limited localization precision for small objects like arrow tips (mAP50-95 of only 19.5%). To compensate, each tip’s position is refined using its associated arrow shaft:</p>
+<ol>
+<li>For each detected tip, find the nearest shaft by Euclidean distance.</li>
+<li>If the nearest shaft is within <strong>50 pixels</strong>, use it, otherwise it likely belongs to a different arrow.</li>
+<li>Compute a refined position by projecting along the shaft’s direction (estimated from its bounding box aspect ratio) to the shaft’s far endpoint.</li>
+<li><strong>Weighted blend</strong> the original tip position with the shaft-refined position:</li>
+</ol>
+<p><span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>P</mi><mtext>final</mtext></msub><mo>=</mo><msub><mi>P</mi><mtext>tip</mtext></msub><mo>⋅</mo><mi>w</mi><mo>+</mo><msub><mi>P</mi><mtext>shaft</mtext></msub><mo>⋅</mo><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><mi>w</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">P_{\text{final}} = P_{\text{tip}} \cdot w + P_{\text{shaft}} \cdot (1 - w)</annotation></semantics></math></span></p>
+<p>where <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>w</mi></mrow><annotation encoding="application/x-tex">w</annotation></semantics></math></span> is the tip’s detection confidence. High-confidence tips are trusted more; low-confidence tips defer to shaft geometry.</p>
+<h4 id="distance-ratio-computation"><strong>Distance Ratio Computation</strong></h4>
+<p>For each refined tip position <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><msub><mi>t</mi><mi>x</mi></msub><mo separator="true">,</mo><msub><mi>t</mi><mi>y</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(t_x, t_y)</annotation></semantics></math></span>:</p>
+<p><span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mo>=</mo><msqrt><mrow><mo stretchy="false">(</mo><msub><mi>t</mi><mi>x</mi></msub><mo>−</mo><msub><mi>c</mi><mi>x</mi></msub><msup><mo stretchy="false">)</mo><mn>2</mn></msup><mo>+</mo><mo stretchy="false">(</mo><msub><mi>t</mi><mi>y</mi></msub><mo>−</mo><msub><mi>c</mi><mi>y</mi></msub><msup><mo stretchy="false">)</mo><mn>2</mn></msup></mrow></msqrt></mrow><annotation encoding="application/x-tex">d = \sqrt{(t_x - c_x)^2 + (t_y - c_y)^2}</annotation></semantics></math></span></p>
+<p><span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>ratio</mtext><mo>=</mo><mfrac><mi>d</mi><msub><mi>R</mi><mtext>full</mtext></msub></mfrac></mrow><annotation encoding="application/x-tex">\text{ratio} = \frac{d}{R_{\text{full}}}</annotation></semantics></math></span></p>
+<p>This ratio is target-size-invariant: 0.0 is dead center (X-ring), 1.0 is the outer edge of ring 1, and values above 1.0 are misses. The angle <span class="katex"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi><mo>=</mo><mtext>atan2</mtext><mo stretchy="false">(</mo><msub><mi>t</mi><mi>y</mi></msub><mo>−</mo><msub><mi>c</mi><mi>y</mi></msub><mo separator="true">,</mo><msub><mi>t</mi><mi>x</mi></msub><mo>−</mo><msub><mi>c</mi><mi>x</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\alpha = \text{atan2}(t_y - c_y, t_x - c_x)</annotation></semantics></math></span> captures the clock direction, which is useful for placing arrows on a clean target diagram in the app.</p>
+<h4 id="ring-lookup"><strong>Ring Lookup</strong></h4>
+<p>The ratio is compared against the <strong>WA 122cm ring table</strong>:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Ring</th><th>Outer Edge Ratio</th><th>Score</th></tr></thead><tbody><tr><td>X</td><td>0.05</td><td>10</td></tr><tr><td>10</td><td>0.10</td><td>10</td></tr><tr><td>9</td><td>0.20</td><td>9</td></tr><tr><td>8</td><td>0.30</td><td>8</td></tr><tr><td>7</td><td>0.40</td><td>7</td></tr><tr><td>6</td><td>0.50</td><td>6</td></tr><tr><td>5</td><td>0.60</td><td>5</td></tr><tr><td>4</td><td>0.70</td><td>4</td></tr><tr><td>3</td><td>0.80</td><td>3</td></tr><tr><td>2</td><td>0.90</td><td>2</td></tr><tr><td>1</td><td>1.00</td><td>1</td></tr><tr><td>Miss</td><td>> 1.0</td><td>0</td></tr></tbody></table>
+<p>The first ring whose outer edge ratio exceeds the tip’s ratio determines the score. Note that both the inner X-ring and the outer 10-ring score 10 points, matching WA rules.</p>
+<h4 id="boundary-detection"><strong>Boundary Detection</strong></h4>
+<p>Arrows landing near ring boundaries are the most common source of scoring disputes. The system flags any arrow whose ratio falls within <strong>±0.015</strong> (the <code>BOUNDARY_TOLERANCE</code>) of any ring edge. These arrows are marked <code>is_boundary: true</code> in the output and displayed with a cyan warning border in the visualization. This alerts the user that manual verification may be needed.</p>
+<hr>
+<h3 id="stage-5--visualization-visualizepy"><strong>Stage 5 — Visualization</strong> (<code>visualize.py</code>)</h3>
+<p>The final stage renders scoring results on the perspective-corrected image:</p>
+<ul>
+<li><strong>Concentric ring overlays</strong>: The full target radius, red zone boundary, black zone boundary, and white zone boundary are drawn as circles centered on the resolved center point. These should visually align with the actual rings on the target.</li>
+<li><strong>Arrow shaft boxes</strong>: Orange rectangles around detected shafts.</li>
+<li><strong>Scored arrow markers</strong>: Each tip is drawn as a filled circle colored by its score, gold for 10/9, red for 8/7, blue for 6/5, black for 4/3, white for 2/1, gray for miss. The numeric score is displayed next to each marker.</li>
+<li><strong>Boundary warnings</strong>: Tips near ring edges get an cyan border ring, providing visual indication of scoring uncertainty.</li>
+</ul>
+<hr>
+<h3 id="stage-6--output"><strong>Stage 6 — Output</strong></h3>
+<p>The pipeline returns a structured dictionary:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#E1E4E8">{</span></span>
+<span class="line"><span style="color:#9ECBFF">    'image'</span><span style="color:#E1E4E8">: </span><span style="color:#9ECBFF">'filename.jpg'</span><span style="color:#E1E4E8">,</span></span>
+<span class="line"><span style="color:#9ECBFF">    'arrows'</span><span style="color:#E1E4E8">: [</span></span>
+<span class="line"><span style="color:#E1E4E8">        {</span><span style="color:#9ECBFF">'score'</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">10</span><span style="color:#E1E4E8">, </span><span style="color:#9ECBFF">'ratio'</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">0.0312</span><span style="color:#E1E4E8">, </span><span style="color:#9ECBFF">'angle'</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">45.2</span><span style="color:#E1E4E8">, </span><span style="color:#9ECBFF">'is_boundary'</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">False</span><span style="color:#E1E4E8">,</span></span>
+<span class="line"><span style="color:#9ECBFF">         'x'</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">412.3</span><span style="color:#E1E4E8">, </span><span style="color:#9ECBFF">'y'</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">438.1</span><span style="color:#E1E4E8">, </span><span style="color:#9ECBFF">'confidence'</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">0.87</span><span style="color:#E1E4E8">},</span></span>
+<span class="line"><span style="color:#79B8FF">        ...</span></span>
+<span class="line"><span style="color:#E1E4E8">    ],</span></span>
+<span class="line"><span style="color:#9ECBFF">    'total'</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">58</span><span style="color:#E1E4E8">,</span></span>
+<span class="line"><span style="color:#9ECBFF">    'arrow_count'</span><span style="color:#E1E4E8">: </span><span style="color:#79B8FF">6</span><span style="color:#E1E4E8">,</span></span>
+<span class="line"><span style="color:#9ECBFF">    'boundaries'</span><span style="color:#E1E4E8">: [</span><span style="color:#79B8FF">3</span><span style="color:#E1E4E8">]   </span><span style="color:#6A737D"># indices of arrows near ring edges</span></span>
+<span class="line"><span style="color:#E1E4E8">}</span></span></code></pre>
+<figure>
+  <img src="/images/score_detection/output_score1.png" alt="Final Score Detection Output">
+  <figcaption>Figure 14. Final Score Detection Output.</figcaption>
+</figure>
+<hr>
+<h2 id="limitations-known-issues--whats-next"><strong>Limitations, Known Issues &#x26; What’s Next</strong></h2>
+<h3 id="current-limitations"><strong>Current Limitations</strong></h3>
+<p><strong>Arrow tip detection degrades when 5+ arrows cluster in high-scoring zones.</strong> This is the single most impactful failure mode and is fundamentally a data problem, the training set has too few examples of dense cluster scenarios.</p>
+<p><strong>Localization precision is insufficient for tournament-grade scoring without user confirmation.</strong> An mAP50-95 of 19.5% on arrow tips means the model’s bounding boxes are often not tight enough to make confident calls near ring boundaries. The boundary flagging system compensates, but manual verification is still required for those cases.</p>
+<p><strong>The model was trained on ~500 images.</strong> Performance is expected to improve substantially with more diverse training data, particularly close-up images of clustered arrows in the gold zone.</p>
+<p><strong>Perspective correction is fragile for some camera angles.</strong> Small errors in the red-zone ellipse radius estimate propagate outward through the ring table. The pipeline compensates by preferring YOLO-detected centers over ellipse-derived ones, but the full correction pipeline remains brittle on difficult angles.</p>
+<h3 id="whats-next"><strong>What’s Next</strong></h3>
+<ul>
+<li>Collect 200–300 more images specifically targeting densely clustered arrows</li>
+<li>Explore keypoint detection models (predicting the tip as a point rather than a bounding box center) to improve mAP50-95</li>
+<li>Investigate more robust perspective correction approaches, potentially using <code>target_face</code> YOLO detection as the primary geometric anchor rather than the HSV ellipse</li>
+<li>Add support for indoor 40cm and triple-spot target faces</li>
+<li>Investigate detecting full ring contours (not only the red zone), fit them jointly, and use the averaged fit for a more robust center and radius estimate.</li>
+</ul>
+<hr>
+<h2 id="references"><strong>References</strong></h2>
+<p><a id="ref-1"></a>1. <a href="https://universe.roboflow.com/archery-skmsa/archery-mbhnh">Roboflow Dataset 1</a> — Archery-skmsa</p>
+<p><a id="ref-2"></a>2. <a href="https://universe.roboflow.com/uni-oidi4/archery-e6v5r">Roboflow Dataset 2</a> — Uni-oidi4</p>
+<p><a id="ref-3"></a>3. <a href="https://universe.roboflow.com/archery-scoring/archery-scoring">Roboflow Dataset 3</a> — Archery-scoring</p>
+<p><a id="ref-4"></a>4. <a href="https://universe.roboflow.com/shrutiharshil/djs-phoenix">Roboflow Dataset 4</a> — Shrutiharshil</p>
+<p><a id="ref-5"></a>5. <a href="https://universe.roboflow.com/amrs-workspace-5ewyi/archeryxpert-score-detection">Roboflow Dataset 5</a> — Final Dataset</p>
+<p><a id="ref-6"></a>6. <a href="https://docs.ultralytics.com/models/yolo26">YOLO26 Docs</a> — Ultralytics YOLO26</p>
+<p><a id="ref-7"></a>7. <a href="https://docs.ultralytics.com/models/yolo12">YOLO12 Docs</a> — Ultralytics YOLO12</p> </div> </article> </main>  </main> <div class="bottom-glow" data-astro-transition-persist="astro-grzff4s5-2"></div> </body></html> 
