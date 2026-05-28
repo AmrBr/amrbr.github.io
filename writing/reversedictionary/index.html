@@ -16,7 +16,7 @@
           document.documentElement.classList.add("theme-transition");
         }, 1000);
       });
-    </script><script data-goatcounter="https://amrbreekaa.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script><link rel="stylesheet" href="/assets/_type_.BzstcMRk.css">
+    </script><script data-goatcounter="https://amrbreekaa.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script><link rel="stylesheet" href="/assets/_type_.i8IrAZCf.css">
 <style>main[data-astro-cid-jxnjfbl4]{width:100%;max-width:640px;margin:0 auto;padding:2rem 1.5rem}.writing[data-astro-cid-jxnjfbl4]{margin-top:2rem}header[data-astro-cid-jxnjfbl4]{margin-bottom:2rem}.metadata[data-astro-cid-jxnjfbl4]{display:flex;gap:1rem;align-items:center;margin-bottom:.5rem}time[data-astro-cid-jxnjfbl4]{color:var(--text-muted);font-size:var(--text-sm)}h1[data-astro-cid-jxnjfbl4]{margin-top:.5rem}.content[data-astro-cid-jxnjfbl4]{line-height:1.7}@media (max-width: 640px){main[data-astro-cid-jxnjfbl4]{padding:1rem}}
 </style></head> <body> <div class="top-glow" data-astro-transition-persist="astro-egz5jgqe-1"></div> <main> <div class="nav-container"> <nav data-astro-cid-o5br4kmp> <div class="nav-links" data-astro-cid-o5br4kmp> <a href="/" class data-astro-cid-o5br4kmp> Home </a><a href="/projects" class data-astro-cid-o5br4kmp> Projects </a><a href="/certifications" class data-astro-cid-o5br4kmp> Certifications </a><a href="/writing" class="active" data-astro-cid-o5br4kmp> Writing </a><a href="/bookmarks" class data-astro-cid-o5br4kmp> Bookmarks </a> </div> </nav>  </div>  <main data-astro-cid-jxnjfbl4> <article class="writing" dir="ltr" data-astro-cid-jxnjfbl4> <header data-astro-cid-jxnjfbl4> <div class="metadata" data-astro-cid-jxnjfbl4> <time datetime="2026-04-30T00:00:00.000Z" data-astro-cid-jxnjfbl4> April 30, 2026 </time> </div> <h1 data-astro-cid-jxnjfbl4>Building an Arabic Reverse Dictionary: From TF-IDF to LLMs</h1> </header> <div class="content" data-astro-cid-jxnjfbl4> <p><em>A step-by-step NLP journey through classical methods, static embeddings, Transformer fine-tuning, and Retrieval-Augmented Generation — all in Arabic.</em></p>
 <hr>
@@ -345,8 +345,11 @@
 <ul>
 <li><strong>Mean Pooling:</strong> Average all token vectors (padding excluded).</li>
 <li><strong>CLS Token:</strong> Use the dedicated <code>[CLS]</code> token vector, designed to represent the full sequence.</li>
-<li><strong>Max Pooling:</strong> Take the maximum value across tokens per dimension, highlighting the most salient features.</li>
+<li><strong>Max Pooling:</strong> Take the maximum value across tokens per dimension, highlighting the most salient features.
+<br> 
+</li>
 </ul>
+<br>
 <p><strong>Retrieval:</strong> The test gloss is encoded and compared to all 76k training gloss vectors via cosine similarity. The closest match maps to its word.</p>
 <p><strong>In-Vocab vs. Overall:</strong> Because the training set forms a closed vocabulary, both metrics are reported. In-Vocab measures accuracy when the correct word <em>exists</em> in the training set. Overall measures accuracy across all test samples, including words never seen during training.</p>
  <br>

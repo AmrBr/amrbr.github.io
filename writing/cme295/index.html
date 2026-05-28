@@ -16,12 +16,33 @@
           document.documentElement.classList.add("theme-transition");
         }, 1000);
       });
-    </script><script data-goatcounter="https://amrbreekaa.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script><link rel="stylesheet" href="/assets/_type_.BzstcMRk.css">
+    </script><script data-goatcounter="https://amrbreekaa.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script><link rel="stylesheet" href="/assets/_type_.i8IrAZCf.css">
 <style>main[data-astro-cid-jxnjfbl4]{width:100%;max-width:640px;margin:0 auto;padding:2rem 1.5rem}.writing[data-astro-cid-jxnjfbl4]{margin-top:2rem}header[data-astro-cid-jxnjfbl4]{margin-bottom:2rem}.metadata[data-astro-cid-jxnjfbl4]{display:flex;gap:1rem;align-items:center;margin-bottom:.5rem}time[data-astro-cid-jxnjfbl4]{color:var(--text-muted);font-size:var(--text-sm)}h1[data-astro-cid-jxnjfbl4]{margin-top:.5rem}.content[data-astro-cid-jxnjfbl4]{line-height:1.7}@media (max-width: 640px){main[data-astro-cid-jxnjfbl4]{padding:1rem}}
 </style></head> <body> <div class="top-glow" data-astro-transition-persist="astro-egz5jgqe-1"></div> <main> <div class="nav-container"> <nav data-astro-cid-o5br4kmp> <div class="nav-links" data-astro-cid-o5br4kmp> <a href="/" class data-astro-cid-o5br4kmp> Home </a><a href="/projects" class data-astro-cid-o5br4kmp> Projects </a><a href="/certifications" class data-astro-cid-o5br4kmp> Certifications </a><a href="/writing" class="active" data-astro-cid-o5br4kmp> Writing </a><a href="/bookmarks" class data-astro-cid-o5br4kmp> Bookmarks </a> </div> </nav>  </div>  <main data-astro-cid-jxnjfbl4> <article class="writing" dir="ltr" data-astro-cid-jxnjfbl4> <header data-astro-cid-jxnjfbl4> <div class="metadata" data-astro-cid-jxnjfbl4> <time datetime="2026-03-11T00:00:00.000Z" data-astro-cid-jxnjfbl4> March 11, 2026 </time> </div> <h1 data-astro-cid-jxnjfbl4>Stanford CME295 Course Notes</h1> </header> <div class="content" data-astro-cid-jxnjfbl4> <blockquote>
 <p>Note: This is a summary/notes taken from the Stanford CME295 course. Please refer to the official <a href="https://cme295.stanford.edu/syllabus/">course page</a> for full and more in-depth explanations.</p>
 </blockquote>
-<h1 id="lecture-one---transformer">Lecture One - Transformer</h1>
+<hr>
+<ul>
+<li><a href="#lecture-one-transformer"><strong>Lecture One: Transformer</strong></a>
+<ul>
+<li><a href="#nlp-overview"><strong>NLP overview</strong></a>
+<ul>
+<li><a href="#1-classification">1. <strong>Classification:</strong></a></li>
+<li><a href="#2-multi-classification">2. <strong>Multi-Classification:</strong></a></li>
+<li><a href="#3-generation">3. <strong>Generation:</strong></a></li>
+</ul>
+</li>
+<li><a href="#tokenization"><strong>Tokenization</strong></a></li>
+<li><a href="#word-representation"><strong>Word Representation</strong></a>
+<ul>
+<li><a href="#word2vec"><strong>Word2Vec</strong></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h1 id="lecture-one-transformer"><strong>Lecture One: Transformer</strong></h1>
 <h2 id="nlp-overview"><strong>NLP overview</strong></h2>
 <p><strong>N</strong>atural <strong>L</strong>anguage <strong>P</strong>rocessing tasks can be divided into three main categories:</p>
 <h3 id="1-classification">1. <strong>Classification:</strong></h3>
@@ -31,9 +52,9 @@
 <li>Sentiment extraction</li>
 </ul>
 <blockquote>
-<p>“This teddy bear is SO CUTE!” -> MODEL -> (+) (Positive review)</p>
+<p>“This teddy bear is SO CUTE!” -> MODEL -> (+) (Positive review)
+<strong>Evaluation Metrics:</strong></p>
 </blockquote>
-<h4 id="evaluation-metrics"><strong>Evaluation Metrics:</strong></h4>
 <ul>
 <li><strong>Accuracy:</strong> The percentage of observations that were correctly predicted.</li>
 <li><strong>Precision:</strong> The percentage of predicted positives that were correct.</li>
@@ -60,7 +81,7 @@
 <blockquote>
 <p>“A cute teddy bear is reading” -> MODEL -> “Un ours en peluche mignon lit”</p>
 </blockquote>
-<h4 id="evaluation-metrics-1">Evaluation Metrics</h4>
+<p><strong>Evaluation Metrics:</strong></p>
 <ul>
 <li><strong>BLEU:</strong> Measure of translation quality, similar to precision.</li>
 <li><strong>ROUGE:</strong> Measure of generation quality, similar to recall.</li>
